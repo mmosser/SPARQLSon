@@ -60,6 +60,14 @@ public class Main {
 				   "BIND_API <https://api.twitter.com/1.1/search/tweets.json?q={l}&result_type=recent>([\"statuses\"][*][\"text\"]) AS (?t) " + 
 				   " }";
 		
+		String query_twitter_jsonpath_singleTweet = "SELECT ?l ?t WHERE {?x <http://example.org/label> ?l " + 
+				   "BIND_API <https://api.twitter.com/1.1/search/tweets.json?q={l}&result_type=recent>($.statuses[1].text) AS (?t) " + 
+				   " }";
+		
+		String query_twitter_jsonpath_allTweets = "SELECT ?l ?t WHERE {?x <http://example.org/label> ?l " + 
+				   "BIND_API <https://api.twitter.com/1.1/search/tweets.json?q={l}&result_type=recent>($.statuses[*].text) AS (?t) " + 
+				   " }";
+		
 		// Definition of parameters
 		
 		HashMap<String, String> params1 = new HashMap<String, String>();
@@ -101,7 +109,7 @@ public class Main {
 		// Execution of the query
 		
 		long start = System.nanoTime();
-		dbw.evaluateSPARQLSon(query_twitter, strategy, params);
+		dbw.evaluateSPARQLSon(query_twitter_jsonpath_allTweets, strategy, params);
 		long elapsedTime = System.nanoTime() - start;
 		
 		System.out.println("Total: " + elapsedTime / 1000000000.0);

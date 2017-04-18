@@ -24,6 +24,8 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import com.jayway.jsonpath.JsonPath;
+
 
 
 
@@ -33,7 +35,7 @@ public class DatabaseWrapper {
 	String TDBdirectory;
 	long timeApi;
 	ArrayList<String> cacheKeys;
-	HashMap<String, JSONObject> cache;
+	HashMap<String, Object> cache; //MM changed JSONObject to Object because of use of jsonpath
 	static final int CACHE_SIZE = 400;
 	static final boolean FUSEKI_ENABLED = false;
 	static final boolean LOG = true;
@@ -145,7 +147,7 @@ public class DatabaseWrapper {
 	}
 
 //MM: Changes of type: MappingSet -> ArrayList<MappingSet> to execute a query for each element of JSONArray
-	public MappingSet execQueryGenURL(String queryString, String apiUrlRequest, String[] jpath, 
+	public MappingSet execQueryGenURL(String queryString, String apiUrlRequest, String jpath, 
 			String[] bindName, GetJSONStrategy strategy, 
 			HashMap<String, String> params) throws JSONException, Exception {
 		Query query = QueryFactory.create(queryString);
@@ -217,7 +219,7 @@ public class DatabaseWrapper {
 					}
 				}
 				String url_req = ApiWrapper.insertValuesURL(apiUrlRequest, rb, params.get("replace_string"));
-				JSONObject json = null;
+				Object json = null;	//MM changed JSONObject to Object because of use of jsonpath
 				try {
 					long start = System.nanoTime();
 					json = retrieve_json(url_req, params, strategy);
@@ -234,16 +236,22 @@ public class DatabaseWrapper {
 				// TODO: resolve 404 and 429 errors.
 				if (json != null) {
 					
-					for (int i = 0; i < jpath.length; i++) {
+					for (int i = 0; i < bindName.length; i++) {
+				//		System.out.println("--DEBUG BINDNAME-- "+bindName[i]);
 						try {
-							ArrayList<String> keys = ApiWrapper.getKeys(jpath[i]);
-							Object value = ApiWrapper.getValueJson(json, keys);
+//MM changes dues to use of jsonpath			
+							//ArrayList<String> keys = ApiWrapper.getKeys(jpath[i]);
+							//Object value = ApiWrapper.getValueJson(json, keys);	
+							//Object value = ApiWrapper.getValueJson(json, jpath[0]);
+							Object value = JsonPath.parse(json).read(jpath);
+						//	System.out.println("--DEBUG CLASS-- \n value: "+value+"\n class:"+value.getClass());
+
 //MM changes					
-							if (value.getClass().equals(JSONArray.class)){
-								for (int j=0; j<((JSONArray)value).length(); j++){
+							if (value.getClass().equals(net.minidev.json.JSONArray.class)){
+								for (int j=0; j<((net.minidev.json.JSONArray)value).size(); j++){
 									Object mapping_clone = mapping.clone();
 									mapping_array.add((HashMap<String, String>)mapping_clone); // I initiate by cloning the mapping I had built into all the mapping_array mappings
-									mapping_array.get(j).put(bindName[i], serializeValue(((JSONArray)value).get(j))); // I add to the mapping_array mappings the relative JSON of the JSONArray
+									mapping_array.get(j).put(bindName[i], serializeValue(((net.minidev.json.JSONArray)value).get(j))); // I add to the mapping_array mappings the relative JSON of the JSONArray
 //									System.out.println("--DEBUG MAPPING: verify the values are correctely storaged-- "
 //													+ "\n mapping: "+mapping+""
 //													+ "\n mapping_clone: "+mapping_clone+""
@@ -435,7 +443,7 @@ public class DatabaseWrapper {
 		String firstQuery = apply_params_to_first_query(params, parsedQuery);
 		MappingSet ms = execQueryGenURL(firstQuery, 
 				(String) parsedQuery.get("URL"), 
-				(String[]) parsedQuery.get("PATH"), 
+				(String) parsedQuery.get("PATH"), 
 				(String[]) parsedQuery.get("ALIAS"),
 				strategy.get(0), params.get(0));
 
@@ -475,13 +483,13 @@ public class DatabaseWrapper {
 		
 	}
 	
-	public JSONObject retrieve_json(String url_req, HashMap<String,String> params, GetJSONStrategy strategy) throws JSONException, Exception {
+	public Object retrieve_json(String url_req, HashMap<String,String> params, GetJSONStrategy strategy) throws JSONException, Exception {
 		if (params.containsKey("cache") && params.get("cache").equals("true")) {
 			if (cache.containsKey(url_req)) {
 				return cache.get(url_req);
 			}
 			else {
-				JSONObject json =  ApiWrapper.getJSON(url_req, params, strategy);
+				Object json =  ApiWrapper.getJSON(url_req, params, strategy);
 				if (cacheKeys.size() < CACHE_SIZE) {
 					cacheKeys.add(url_req);
 					cache.put(url_req, json);
