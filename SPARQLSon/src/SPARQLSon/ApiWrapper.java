@@ -119,27 +119,52 @@ public class ApiWrapper {
 	}
 	
 //MM: New method to handle the case of [*]	
-	public static JSONArray getAllFromJsonArray(JSONArray jsonArray, ArrayList<String> keys) throws JSONException {	
+	public static ArrayList<Object> getAllFromJsonArray(JSONArray jsonArray, ArrayList<String> keys) throws JSONException {	
 
-		JSONArray result = new JSONArray();
+		ArrayList<Object> result = new ArrayList<Object>();
 
 		if (keys.size() == 1) {
-			result = jsonArray;
+			for (int i=0; i<jsonArray.length();i++){
+				result.add((Object)jsonArray.get(i));
+			}
 		}
 		else {
 			ArrayList<String> new_keys = new ArrayList<String>(keys.subList(1, keys.size())); // new_keys init at 2 because we don't want to keep the *
 			for(int i=0; i<jsonArray.length(); i++) {
-				result.put(i, getValueJson(jsonArray.get(i), new_keys));
+				result.add(i, getValueJson(jsonArray.get(i), new_keys));
 			}
 		}
-//MM: to manage the case with more than one [*]: [...,...] <- [[...],[...]]
-		String s = result.toString().replaceAll("\\[{2,}", "[").replaceAll("\\]{2,}", "]").replaceAll("\\],\\[", ",");
-		JSONArray result_corrected = new JSONArray(s);
-//		
-		return (result_corrected);
+	
+		return (mergeArrayLists(result));
 
 	}
+	
+//MM: New function to manage the case with more than one [*]: [...,...] <- [[...],[...]]	
+	public static ArrayList<Object> mergeArrayLists(ArrayList<Object> list) {
+		
+		ArrayList<Object> list_merged = new ArrayList<Object>();
+		boolean iterate = false;
+
+		for (int i=0; i<list.size(); i++){
+			if(list.get(i).getClass().equals(ArrayList.class)){
+				iterate=true;
+				for (int j=0; j<((ArrayList)list.get(i)).size(); j++){
+					list_merged.add(((ArrayList)list.get(i)).get(j));
+				}
+			}
+			else{
+				list_merged.add(list.get(i));
+			}	
+		}
+		if (iterate){ //There is at least one element of "list" which is an ArrayList, so we iterate.
+			return (mergeArrayLists(list_merged));
+		}
+		else { //All the elements of "list" are simple Objects, so we end.
+			return list;
+		}
+	}
 */	
+
 
 }
 
