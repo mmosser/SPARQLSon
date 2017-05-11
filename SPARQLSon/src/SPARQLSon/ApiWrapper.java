@@ -1,18 +1,21 @@
 package SPARQLSon;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.URL;
+//import java.io.BufferedReader;
+//import java.io.InputStreamReader;
+//import java.net.URL;
 
-import java.util.ArrayList;
+//import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Map;
+//import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.jena.query.QuerySolution;
-import org.apache.jena.sparql.core.QuerySolutionBase;
+//import org.apache.jena.sparql.core.QuerySolutionBase;
 import org.json.*;
+
+import com.jayway.jsonpath.Configuration;
+import com.jayway.jsonpath.JsonPath;
 
 
 // changes from MM included
@@ -20,9 +23,10 @@ import org.json.*;
 public class ApiWrapper {
 	
 	
-	public static JSONObject getJSON(String urlString, HashMap<String,String> params, GetJSONStrategy strategy) throws JSONException, Exception {
+	public static Object getJSON(String urlString, HashMap<String,String> params, GetJSONStrategy strategy) throws JSONException, Exception {
 		JSONObject json = new JSONObject(strategy.readURL(urlString));
-		return json;
+		Object document = Configuration.defaultConfiguration().jsonProvider().parse(json.toString());
+		return document;
 	}
 	
 	// Function to insert a part of the result of the SPARQL request into the API request
@@ -41,10 +45,13 @@ public class ApiWrapper {
 	}
 	
 	
+//OLD VERSION WITHOUT DEPENDENCY JSONPATH	
 	
+/*	
 	public static ArrayList<String> getKeys(String serializedKeys) {	// MM changed the regex pattern to match the [*]
-		ArrayList<String> keys = new ArrayList<String>();
 		
+		System.out.println("--DEBUG SERIALIZEDKEYS-- "+serializedKeys);
+		ArrayList<String> keys = new ArrayList<String>();		
 		
 //OLD:	Pattern pattern_variables = Pattern.compile("\\[([\"]{0,1}\\w*[\"]{0,1})\\]"); //encuentra [], hay "" o no, si lo encuentras es un object sino una regla, agregalo a una lista
 //MM: 	Change in the regex to match the [*] key if there is
@@ -57,10 +64,10 @@ public class ApiWrapper {
 		}
 		return keys;
 	}
+
 	
-	
-	
-	public static Object getValueJson(Object json, ArrayList<String> keys) throws JSONException { // MM changed the regex pattern to match the [*]
+	public static Object getValueJson(Object json, String jpath) throws JSONException { // MM changed the regex pattern to match the [*]
+
 		if (json.getClass().equals(JSONObject.class)) {
 			
 			String key = keys.get(0).substring(1, keys.get(0).length() - 1); // with the first element of keys: abc <- "abc"
@@ -156,8 +163,8 @@ public class ApiWrapper {
 			return list;
 		}
 	}
+*/	
 
-	
 
 }
 

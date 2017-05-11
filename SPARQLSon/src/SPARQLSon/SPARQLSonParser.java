@@ -16,6 +16,7 @@ public class SPARQLSonParser {
 	public static String[] getSelectSection(String queryString, boolean replace) {
 		String newQueryString = queryString.trim();
 		if(replace) {
+			//Eliminar los multiespacios que no son entre ""
 			newQueryString = newQueryString.replaceAll("\\s+(?=((\\\\[\\\\\"]|[^\\\\\"])*\"(\\\\[\\\\\"]|[^\\\\\"])*\")*(\\\\[\\\\\"]|[^\\\\\"])*$)", " ");
 		}
 		int cutIndex = newQueryString.indexOf('{');
@@ -24,7 +25,8 @@ public class SPARQLSonParser {
 		String[] retArray = {selectSection, postSelectSection};
 		return retArray;
 	}
-	
+
+// MM changes because of Jsonpath
 	public static HashMap<String, Object> getBindSection(String postSelectSection) {
 		String bind_url_string = " BIND_API <([\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+)>(?=((\\\\[\\\\\"]|[^\\\\\"])*\"(\\\\[\\\\\"]|[^\\\\\"])*\")*(\\\\[\\\\\"]|[^\\\\\"])*$)";
 		Pattern pattern_variables = Pattern.compile(bind_url_string);

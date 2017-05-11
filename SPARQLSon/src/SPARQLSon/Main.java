@@ -60,6 +60,21 @@ public class Main {
 				   "BIND_API <https://api.twitter.com/1.1/search/tweets.json?q={l}&result_type=recent>([\"statuses\"][*][\"text\"]) AS (?t) " + 
 				   " }";
 		
+		String query_twitter_jsonpath_singleTweet = "SELECT ?l ?t WHERE {?x <http://example.org/label> ?l " + 
+				   "BIND_API <https://api.twitter.com/1.1/search/tweets.json?q={l}&result_type=recent>($.statuses[1].text) AS (?t) " + 
+				   " }";
+		
+		String query_twitter_jsonpath_allTweets = "SELECT ?l ?t WHERE {?x <http://example.org/label> ?l " + 
+				   "BIND_API <https://api.twitter.com/1.1/search/tweets.json?q={l}&result_type=recent>($.statuses[*].text) AS (?t) " + 
+				   " }";
+		
+		String localAPI_test_productX = "SELECT ?l ?t1 ?t2 ?v WHERE {?x <http://example.org/label> ?l " + 
+				   "BIND_API <http://localhost:3000/api>($.value_1[*], $.value_2[*], $.version[*]) AS (?t1, ?t2, ?v) " + 
+				   " }";
+		String localAPI_test_simple = "SELECT ?l ?t1 ?t2 ?v WHERE {?x <http://example.org/label> ?l " + 
+				   "BIND_API <http://localhost:3000/api>($.value_1[0], $.value_2[0], $.version[*]) AS (?t1, ?t2, ?v) " + 
+				   " }";
+		
 		// Definition of parameters
 		
 		HashMap<String, String> params1 = new HashMap<String, String>();
@@ -93,15 +108,15 @@ public class Main {
 		ArrayList<GetJSONStrategy> strategy = new ArrayList<>();
 		ArrayList<HashMap<String, String>> params = new ArrayList<HashMap<String,String>>();
 		
-		strategy.add(strategy_oauth);
-		/* strategy.add(strategy_basic);	*/
+	//	strategy.add(strategy_oauth);
+		strategy.add(strategy_basic);	
 		params.add(params1);
 		
 		
 		// Execution of the query
 		
 		long start = System.nanoTime();
-		dbw.evaluateSPARQLSon(query_twitter, strategy, params);
+		dbw.evaluateSPARQLSon(localAPI_test_simple, strategy, params);
 		long elapsedTime = System.nanoTime() - start;
 		
 		System.out.println("Total: " + elapsedTime / 1000000000.0);
