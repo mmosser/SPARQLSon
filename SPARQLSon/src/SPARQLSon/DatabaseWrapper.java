@@ -147,7 +147,7 @@ public class DatabaseWrapper {
 	}
 
 //MM: Changes of type: MappingSet -> ArrayList<MappingSet> to execute a query for each element of JSONArray
-	public MappingSet execQueryGenURL(String queryString, String apiUrlRequest, String jpath, 
+	public MappingSet execQueryGenURL(String queryString, String apiUrlRequest, String[] jpath, 
 			String[] bindName, GetJSONStrategy strategy, 
 			HashMap<String, String> params) throws JSONException, Exception {
 		Query query = QueryFactory.create(queryString);
@@ -190,7 +190,9 @@ public class DatabaseWrapper {
 				HashMap<String, String> mapping = new HashMap<String, String>();
 // MM change: I create an array of mapping which is gonna be added to each ms
 				ArrayList<HashMap<String, String>> mapping_array = new ArrayList<HashMap<String, String>>();
-//					
+//				
+				int mapping_array_size=0;
+
 				for(String var: vars_name) {
 					if (rb.contains(var))
 					{
@@ -235,36 +237,55 @@ public class DatabaseWrapper {
 
 				// TODO: resolve 404 and 429 errors.
 				if (json != null) {
-					
 					for (int i = 0; i < bindName.length; i++) {
-				//		System.out.println("--DEBUG BINDNAME-- "+bindName[i]);
-						try {
-//MM changes dues to use of jsonpath			
-							//ArrayList<String> keys = ApiWrapper.getKeys(jpath[i]);
-							//Object value = ApiWrapper.getValueJson(json, keys);	
-							//Object value = ApiWrapper.getValueJson(json, jpath[0]);
-							Object value = JsonPath.parse(json).read(jpath);
-						//	System.out.println("--DEBUG CLASS-- \n value: "+value+"\n class:"+value.getClass());
-
-//MM changes					
+						System.out.println("--DEBUG BINDNAME-- "+bindName[i]);
+						try {						
+							Object value = JsonPath.parse(json).read(jpath[i]);							
+							// CASE value.class = Array of Elements
 							if (value.getClass().equals(net.minidev.json.JSONArray.class)){
-								for (int j=0; j<((net.minidev.json.JSONArray)value).size(); j++){
-									Object mapping_clone = mapping.clone();
-									mapping_array.add((HashMap<String, String>)mapping_clone); // I initiate by cloning the mapping I had built into all the mapping_array mappings
-									mapping_array.get(j).put(bindName[i], serializeValue(((net.minidev.json.JSONArray)value).get(j))); // I add to the mapping_array mappings the relative JSON of the JSONArray
-//									System.out.println("--DEBUG MAPPING: verify the values are correctely storaged-- "
-//													+ "\n mapping: "+mapping+""
-//													+ "\n mapping_clone: "+mapping_clone+""
-//													+ "\n mapping_array: "+mapping_array.get(j));
+								for (int j=0; j<((net.minidev.json.JSONArray)value).size(); j++){		
+									// CASE json_nav = first argument
+									if(i==0){
+										Object mapping_clone = mapping.clone();
+										mapping_array.add((HashMap<String, String>)mapping_clone); // I initiate by cloning the mapping I had built into all the mapping_array mappings
+										mapping_array.get(mapping_array.size()-1).put(bindName[i], serializeValue(((net.minidev.json.JSONArray)value).get(j))); // I add to the mapping_array mappings the relative JSON of the JSONArray
+									}
+									// CASE json_nav = next arguments
+									else {
+										// I assign to each element of mapping_array the first value of the new argument
+										if(j==0){
+											for (int k=0; k<mapping_array.size(); k++){
+												mapping_array.get(k).put(bindName[i], serializeValue(((net.minidev.json.JSONArray)value).get(j))); // I add to the mapping_array mappings the relative JSON of the JSONArray
+											}
+										}
+										// For each next values, I first "duplicate" the original mapping_array and then assign the value to the duplicate
+										else {
+											for (int k=0; k<mapping_array_size; k++){
+												Object mapping_clone = mapping_array.get(k).clone();
+												mapping_array.add((HashMap<String, String>)mapping_clone);
+												mapping_array.get(mapping_array.size()-1).put(bindName[i], serializeValue(((net.minidev.json.JSONArray)value).get(j)));
+											}
+										}
+										
+									}
 								}		
 							}
+							// CASE value.class = Single Element
 							else {
-//								System.out.println("--DEBUG THIS IS A CASE WITHOUT JSONARRAY--");
-								mapping.put(bindName[i], serializeValue(value));
-								mapping_array.add(mapping); // the ArrayList has a size=1				
-							}
-//							System.out.println("--DEBUG MAPPING_ARRAY-- \n Mapping_array: "+ mapping_array +" / \n Size: "+ mapping_array.size());
-// MM changes end	
+								// CASE json_nav = first argument
+								if(i==0){
+									mapping.put(bindName[i], serializeValue(value));
+									mapping_array.add(mapping); // the ArrayList has a size=1				
+								}
+								// CASE json_nav = next arguments
+								else {
+									mapping.put(bindName[i], serializeValue(value));
+								}
+							}					
+							mapping_array_size = mapping_array.size();
+							
+						//	System.out.println("--DEBUG CLASS-- \n value: "+value+"\n class:"+value.getClass());
+
 						}
 
 						catch (Exception name) {
@@ -274,11 +295,12 @@ public class DatabaseWrapper {
 								mapping_array.get(k).put(bindName[i], "UNDEF");
 							}
 						}
-					}			
+						
+					}	
 					for (int k=0; k<mapping_array.size(); k++){
 						ms.addMapping(mapping_array.get(k));
 						numb_mappings=numb_mappings+1;
-					}					
+					}
 				}
 
 			numb_iteration_rs = numb_iteration_rs + 1;
@@ -296,7 +318,9 @@ public class DatabaseWrapper {
 		System.out.println("--DEBUG FINAL MAPPINGSET-- \n ms: "+ms.serializeAsValues()+"\n Number of mappings: "+numb_mappings);
 		return ms;
 	}
-
+	
+	
+	
 	
 //MM TODO?? change the MappingSet into ArrayList<MappingSet>
 	public MappingSet execQueryDistinct(String queryString, HashMap<String, String> params) throws JSONException, Exception {
@@ -443,7 +467,7 @@ public class DatabaseWrapper {
 		String firstQuery = apply_params_to_first_query(params, parsedQuery);
 		MappingSet ms = execQueryGenURL(firstQuery, 
 				(String) parsedQuery.get("URL"), 
-				(String) parsedQuery.get("PATH"), 
+				(String[]) parsedQuery.get("PATH"), 
 				(String[]) parsedQuery.get("ALIAS"),
 				strategy.get(0), params.get(0));
 

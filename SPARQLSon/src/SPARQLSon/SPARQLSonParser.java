@@ -16,7 +16,7 @@ public class SPARQLSonParser {
 	public static String[] getSelectSection(String queryString, boolean replace) {
 		String newQueryString = queryString.trim();
 		if(replace) {
-			//Pregunta a Adrian: que hace ?
+			//Eliminar los multiespacios que no son entre ""
 			newQueryString = newQueryString.replaceAll("\\s+(?=((\\\\[\\\\\"]|[^\\\\\"])*\"(\\\\[\\\\\"]|[^\\\\\"])*\")*(\\\\[\\\\\"]|[^\\\\\"])*$)", " ");
 		}
 		int cutIndex = newQueryString.indexOf('{');
@@ -47,7 +47,7 @@ public class SPARQLSonParser {
 		}
 		String json_nav_string = post_bind_string.substring(1, loc);
 		String post_nav_string = post_bind_string.substring(loc + 1).trim().replaceAll("^AS ", "").trim();
-	//	String[] json_navs = json_nav_string.split(",[\\s]*(?=((\\\\[\\\\\"]|[^\\\\\"])*\"(\\\\[\\\\\"]|[^\\\\\"])*\")*(\\\\[\\\\\"]|[^\\\\\"])*$)");
+		String[] json_navs = json_nav_string.split(",[\\s]*(?=((\\\\[\\\\\"]|[^\\\\\"])*\"(\\\\[\\\\\"]|[^\\\\\"])*\")*(\\\\[\\\\\"]|[^\\\\\"])*$)");
 		
 		m = pattern_variables.matcher(post_nav_string);
 		loc = -1;
@@ -62,7 +62,7 @@ public class SPARQLSonParser {
 		String post_aliases_string = post_nav_string.substring(loc + 1).trim();
 		bindSections.put("LAST", post_aliases_string);
 		bindSections.put("ALIAS", aliases);
-		bindSections.put("PATH", json_nav_string);
+		bindSections.put("PATH", json_navs);
 		return bindSections;
 	}
 	
