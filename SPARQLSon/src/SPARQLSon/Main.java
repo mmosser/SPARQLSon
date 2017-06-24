@@ -12,8 +12,11 @@ public class Main {
 		
 		// Database loading
 		
-		String TDBdirectory = "C:/Users/matth/OneDrive/Documents/UC/PROYECTO MAGISTER/Dev-magister/db";
+		String TDBdirectory = "C:/Users/matth/Documents/UC/PROYECTO MAGISTER/Dev-magister/db";
 		DatabaseWrapper dbw = new DatabaseWrapper(TDBdirectory);
+		
+//		String TDBServiceDirectory = "C:/Users/matth/Documents/UC/PROYECTO MAGISTER/Dev-magister/dbService";
+//		DatabaseWrapper dbwService = new DatabaseWrapper(TDBServiceDirectory);
 		
 		// Examples of query using the BIND_API function
 		
