@@ -4,7 +4,7 @@ public class EasyQuery {
 
 	public static void main(String[] args) {
 
-		String TDBdirectory = "C:/Users/matth/OneDrive/Documents/UC/PROYECTO MAGISTER/Dev-magister/db";
+		String TDBdirectory = "C:/Users/matth/Documents/UC/PROYECTO MAGISTER/Dev-magister/db";
 		String queryString = "SELECT * WHERE{?x ?y ?z . ?z <http://example.org/label/> ?n}";
 		
 		String[] variables = {"x", "l"};

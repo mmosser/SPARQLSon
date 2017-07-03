@@ -16,6 +16,8 @@ import org.apache.jena.sparql.core.DatasetImpl;
 public class ServiceExampleQuery {
 	public static void main(String[] args) throws Exception {
 		
+		String TDBdirectory = "C:/Users/matth/Documents/UC/PROYECTO MAGISTER/Dev-magister/db";
+		
 		String query_movie =
 			"PREFIX owl: <http://www.w3.org/2002/07/owl#> \n" +
 			"PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> \n" +
@@ -24,9 +26,9 @@ public class ServiceExampleQuery {
 
 			"SELECT ?film ?label ?subject WHERE {\n" +
 			"    SERVICE <http://data.linkedmdb.org/sparql> {\n" +
-			"        ?film a movie:film .\n" +
-			"        ?film rdfs:label ?label .\n" +
-			"        ?film owl:sameAs ?dbpediaLink .\n" +
+			"        ?film a movie:film ;\n" +
+			"        	rdfs:label ?label ;\n" +
+			"        	owl:sameAs ?dbpediaLink .\n" +
 			"        FILTER(regex(str(?dbpediaLink), 'dbpedia', 'i')) \n" +
 			"    }\n" +
 			"    SERVICE <http://dbpedia.org/sparql> {\n" +
@@ -35,18 +37,28 @@ public class ServiceExampleQuery {
 			"}\n" +
 			"LIMIT 50 \n";
 		
-		System.out.println("--QUERYING-- \n" + query_movie);
+		String query = 
+				  "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> \n"
+				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> \n"
+				+ "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
+				+ "\n"
+				+ "SELECT DISTINCT ?place ?label ?lat ?long WHERE  {\n"
+				+ "  ?place ?link <http://dbpedia.org/resource/Chile> .\n"
+				+ "  ?place geo:lat ?lat .\n"
+				+ "  ?place geo:long ?long .\n"
+				+ "  SERVICE <http://dbpedia.org/sparql> {\n"
+				+ "    ?place rdfs:label ?label .\n"
+				+ "    FILTER(lang(?label) = 'es') .\n"
+    			+ "  }"
+				+ "}";
+		
+		String test = "select * where {?p ?o <http://dbpedia.org/resource/Chile>} limit 10";
+		
+		System.out.println("--QUERYING-- \n" + query);
 		long start = System.nanoTime();
 		
-		QueryExecution exec =  QueryExecutionFactory.create(QueryFactory.create(query_movie), new
-				DatasetImpl(ModelFactory.createDefaultModel()));		
-		ResultSet results = exec.execSelect();
-		
-		System.out.println("--RESULTS-- \n");
-	    for ( ; results.hasNext() ; ) {
-	    	QuerySolution soln = results.nextSolution() ;
-	    	System.out.println(soln);
-	    }
+		DatabaseWrapper dbw = new DatabaseWrapper(TDBdirectory);
+		dbw.execQuery(query);
 	    long elapsedTime = System.nanoTime() - start;
 		System.out.println("Total: " + elapsedTime / 1000000000.0);		
 	}
