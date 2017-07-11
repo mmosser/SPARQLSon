@@ -181,12 +181,10 @@ public class DatabaseWrapper {
 			ms.set_var_names(ms_varnames);
 			// The order of results is undefined. 
 			
-// MM change to avoid increase the size of the arrayList -> otherwise, the query is called more times that what we need
 			int numb_iteration_rs=0;
-//
 			for ( ; rs.hasNext() ; ) {
 				QuerySolution rb = rs.nextSolution() ;			
-				System.out.println("--DEBUG QUERYSOLUTION LOOP-- "+rb+" -- Iteration n° "+(numb_iteration_rs+1));
+//				System.out.println("--DEBUG QUERYSOLUTION LOOP-- "+rb+" -- Iteration n° "+(numb_iteration_rs+1));
 				HashMap<String, String> mapping = new HashMap<String, String>();
 // MM change: I create an array of mapping which is gonna be added to each ms
 				ArrayList<HashMap<String, String>> mapping_array = new ArrayList<HashMap<String, String>>();
@@ -238,19 +236,19 @@ public class DatabaseWrapper {
 				// TODO: resolve 404 and 429 errors.
 				if (json != null) {
 					for (int i = 0; i < bindName.length; i++) {
-						System.out.println("--DEBUG BINDNAME-- "+bindName[i]);
+//						System.out.println("--DEBUG BINDNAME-- "+bindName[i]);
 						try {						
 							Object value = JsonPath.parse(json).read(jpath[i]);							
-							// CASE value.class = Array of Elements
+							// CASE 1: value.class = Array of Elements
 							if (value.getClass().equals(net.minidev.json.JSONArray.class)){
 								for (int j=0; j<((net.minidev.json.JSONArray)value).size(); j++){		
-									// CASE json_nav = first argument
+									// CASE 1.A: json_nav = first argument
 									if(i==0){
 										Object mapping_clone = mapping.clone();
 										mapping_array.add((HashMap<String, String>)mapping_clone); // I initiate by cloning the mapping I had built into all the mapping_array mappings
 										mapping_array.get(mapping_array.size()-1).put(bindName[i], serializeValue(((net.minidev.json.JSONArray)value).get(j))); // I add to the mapping_array mappings the relative JSON of the JSONArray
 									}
-									// CASE json_nav = next arguments
+									// CASE 1.B: json_nav = next arguments
 									else {
 										// I assign to each element of mapping_array the first value of the new argument
 										if(j==0){
@@ -268,18 +266,20 @@ public class DatabaseWrapper {
 										}
 										
 									}
-								}		
+								}	
 							}
-							// CASE value.class = Single Element
+							// CASE 2: value.class = Single Element
 							else {
-								// CASE json_nav = first argument
+								// CASE 2.A: json_nav = first argument
 								if(i==0){
 									mapping.put(bindName[i], serializeValue(value));
 									mapping_array.add(mapping); // the ArrayList has a size=1				
 								}
-								// CASE json_nav = next arguments
+								// CASE 2.B: json_nav = next arguments
 								else {
-									mapping.put(bindName[i], serializeValue(value));
+									for (int k=0; k<mapping_array.size(); k++){
+										mapping_array.get(k).put(bindName[i], serializeValue(value));
+									}
 								}
 							}					
 							mapping_array_size = mapping_array.size();
@@ -290,21 +290,27 @@ public class DatabaseWrapper {
 
 						catch (Exception name) {
 							System.out.println("ERROR: " + name);
-// MM changes
-							for (int k=0; k<mapping_array.size(); k++){
-								mapping_array.get(k).put(bindName[i], "UNDEF");
+							// CASE 0.A: json_nav = first argument
+							if(i==0){
+								mapping.put(bindName[i], "UNDEF");
+								mapping_array.add(mapping); // the ArrayList has a size=1				
+							}
+							// CASE 0.B: json_nav = next arguments
+							else {
+								for (int k=0; k<mapping_array.size(); k++){
+									mapping_array.get(k).put(bindName[i], "UNDEF");
+								}
 							}
 						}
-						
-					}	
+					}
+					// Add all the mappings relative to the result rb to the MappingSet to return
 					for (int k=0; k<mapping_array.size(); k++){
 						ms.addMapping(mapping_array.get(k));
-						numb_mappings=numb_mappings+1;
+						numb_mappings += +1;
 					}
 				}
-
-			numb_iteration_rs = numb_iteration_rs + 1;
-// MM changes end			
+			// Increment the number of iterations on results rb from the ResultSet rs
+			numb_iteration_rs += 1;
 			}
 		}
 		finally
@@ -447,11 +453,9 @@ public class DatabaseWrapper {
 			Iterator<String> names = rb.varNames();
 			while (names.hasNext()) {	
 				String v = names.next();
-				// System.out.println("Variable: " + v + ", Value: " + rb.get(v));
 				mappingToJson.put(v, rb.get(v));
 			}
 
-			//System.out.println("######");
 			((JSONArray)jsonResponse.getJSONArray("results")).put(mappingToJson);
 			mapping_count++;
 
@@ -465,27 +469,31 @@ public class DatabaseWrapper {
 		strategy.get(0).set_params(params.get(0));
 		HashMap<String, Object> parsedQuery = SPARQLSonParser.parseSPARQLSonQuery(queryString, replace);
 		String firstQuery = apply_params_to_first_query(params, parsedQuery);
-		MappingSet ms = execQueryGenURL(firstQuery, 
-				(String) parsedQuery.get("URL"), 
-				(String[]) parsedQuery.get("PATH"), 
-				(String[]) parsedQuery.get("ALIAS"),
-				strategy.get(0), params.get(0));
+		if (parsedQuery.get("URL")!= null && parsedQuery.get("PATH") != null && parsedQuery.get("ALIAS") != null ) {
+			MappingSet ms = execQueryGenURL(firstQuery, 
+					(String) parsedQuery.get("URL"), 
+					(String[]) parsedQuery.get("PATH"), 
+					(String[]) parsedQuery.get("ALIAS"),
+					strategy.get(0), params.get(0));
+			if (params.get(0).containsKey("distinct") && params.get(0).get("distinct").equals("true")) {
+				String new_query = (String) parsedQuery.get("PREFIX") + " SELECT * WHERE{ " +  ms.serializeAsValues() + " " + (String) parsedQuery.get("FIRST") + " } ";
+				ms = execQueryDistinct(new_query, params.get(0));
+			}
 
-		if (params.get(0).containsKey("distinct") && params.get(0).get("distinct").equals("true")) {
-			String new_query = "SELECT * WHERE{ " +  ms.serializeAsValues() + " " + (String) parsedQuery.get("FIRST") + " } ";
-			ms = execQueryDistinct(new_query, params.get(0));
-		}
-
-		String bind_url_string = " BIND_API <([\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+)>(?=((\\\\[\\\\\"]|[^\\\\\"])*\"(\\\\[\\\\\"]|[^\\\\\"])*\")*(\\\\[\\\\\"]|[^\\\\\"])*$)";
-		Pattern pattern_variables = Pattern.compile(bind_url_string);
-		Matcher m = pattern_variables.matcher(" " + (String) parsedQuery.get("LAST"));
+			String api_url_string = " +SERVICE +<([\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+)> *\\{ *\\( *(\\$.*$)";	
+			Pattern pattern_variables = Pattern.compile(api_url_string);
+			Matcher m = pattern_variables.matcher(" " + (String) parsedQuery.get("LAST"));
 			if (m.find()) {
-					String recursive_query_string = ((String) parsedQuery.get("SELECT")) + ms.serializeAsValues() + (String) parsedQuery.get("LAST");
-					evaluateSPARQLSon(recursive_query_string, new ArrayList<GetJSONStrategy>(strategy.subList(1, strategy.size())), new ArrayList<HashMap<String,String>>(params.subList(1, params.size())), false);
-				}
+				String recursive_query_string = ((String) parsedQuery.get("PREFIX")) + ((String) parsedQuery.get("SELECT")) + ms.serializeAsValues() + (String) parsedQuery.get("LAST");
+				evaluateSPARQLSon(recursive_query_string, new ArrayList<GetJSONStrategy>(strategy.subList(1, strategy.size())), new ArrayList<HashMap<String,String>>(params.subList(1, params.size())), false);
+			}
 			else {
 				execPostBindQuery((String) parsedQuery.get("SELECT"), (String) parsedQuery.get("LAST"), ms);
 			}
+		}
+		else {
+			execQuery(queryString);
+		}
 	}
 
 	public void evaluateSPARQLSon(String queryString, ArrayList<GetJSONStrategy> strategy, ArrayList<HashMap<String, String>> params) throws JSONException, Exception {
@@ -495,16 +503,15 @@ public class DatabaseWrapper {
 	public String apply_params_to_first_query(ArrayList<HashMap<String, String>> params, HashMap<String, Object> parsedQuery) throws JSONException, Exception {
 		String new_query = "";
 		if (params.get(0).containsKey("distinct") && params.get(0).get("distinct").equals("true")) {
-			new_query = "SELECT DISTINCT " + params.get(0).get("distinct_var") + " WHERE { " + (String) parsedQuery.get("FIRST") + " } ";
+			new_query = (String) parsedQuery.get("PREFIX") + " SELECT DISTINCT " + params.get(0).get("distinct_var") + " WHERE { " + (String) parsedQuery.get("FIRST") + " } ";
 		}
 		else {
-			new_query = "SELECT * WHERE { " + (String) parsedQuery.get("FIRST") + " } ";
+			new_query = (String) parsedQuery.get("PREFIX") + " SELECT * WHERE { " + (String) parsedQuery.get("FIRST") + " } ";
 		}
 		if (params.get(0).containsKey("limit")) {
 			new_query += "LIMIT " + params.get(0).get("limit") + " ";
 		}
-		return new_query;
-		
+		return new_query;		
 	}
 	
 	public Object retrieve_json(String url_req, HashMap<String,String> params, GetJSONStrategy strategy) throws JSONException, Exception {

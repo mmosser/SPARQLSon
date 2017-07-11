@@ -77,6 +77,101 @@ public class Main {
 		String localAPI_test_simple = "SELECT ?l ?t1 ?t2 ?v WHERE {?x <http://example.org/label> ?l " + 
 				   "BIND_API <http://localhost:3000/api>($.value_1[0], $.value_2[0], $.version[*]) AS (?t1, ?t2, ?v) " + 
 				   " }";
+		// Implementation with service
+		String test_service_api = "SELECT ?place ?t1 ?t2 ?v WHERE {?place ?link <http://dbpedia.org/resource/Chile> " + 
+				   "SERVICE <http://localhost:3000/api>{($.value_1[\"coucou, $)/\\je suis\"], $.value_2[0], $.version[*]) AS (?t1, ?t2, ?v)}" + 
+				   " }";
+		
+		String test_service_multiple_api = "SELECT ?place ?t1 ?t2 ?v WHERE {?place ?link <http://dbpedia.org/resource/Chile> " + 
+				   "SERVICE <http://localhost:3000/api>{($.value_1[0], $.value_2[0]) AS (?t1, ?t2)}" +
+				   "SERVICE <http://localhost:3000/api>{($.version[*]) AS (?v)}" +
+				   " }";
+		
+		String test_service_sparql = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
+				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
+				+ "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
+				+ "SELECT DISTINCT ?place ?label ?lat ?long WHERE  {"
+				+ "  ?place ?link <http://dbpedia.org/resource/Chile> ."
+				+ "  ?place geo:lat ?lat ."
+				+ "  ?place geo:long ?long ."
+				+ "  SERVICE <http://dbpedia.org/sparql> {"
+				+ "    ?place rdfs:label ?label ."
+				+ "    FILTER(lang(?label) = 'es') ."
+    			+ "  }"
+				+ "}";
+		
+		String test_service_sparql_api = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
+				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
+				+ "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
+				+ "SELECT DISTINCT ?place ?label ?lat ?long ?v WHERE  {"
+				+ "  ?place ?link <http://dbpedia.org/resource/Chile> ."
+				+ "  ?place geo:lat ?lat ."
+				+ "  ?place geo:long ?long ."
+				+ "  SERVICE <http://dbpedia.org/sparql> {"
+				+ "    ?place rdfs:label ?label ."
+				+ "    FILTER(lang(?label) = 'es') ."
+    			+ "  }"
+    			+ "  SERVICE <http://localhost:3000/api>{($.version[*]) AS (?v)}"
+				+ "}";
+		
+		String test_service_api_sparql = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
+				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
+				+ "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
+				+ "SELECT DISTINCT ?place ?label ?lat ?long ?v WHERE  {"
+				+ "  ?place ?link <http://dbpedia.org/resource/Chile> ."
+				+ "  ?place geo:lat ?lat ."
+				+ "  ?place geo:long ?long ."
+				+ "  SERVICE <http://localhost:3000/api>{($.version[*]) AS (?v)}"
+				+ "  SERVICE <http://dbpedia.org/sparql> {"
+				+ "    ?place rdfs:label ?label ."
+				+ "    FILTER(lang(?label) = 'es') ."
+    			+ "  }"
+				+ "}";
+		
+		String test_service_api_sparql_api = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> \n"
+				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> \n"
+				+ "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> \n"
+				+ "SELECT DISTINCT ?place ?label ?lat ?long ?t1 ?t2 ?v WHERE  { \n"
+				+ "  ?place ?link <http://dbpedia.org/resource/Chile> .\n"
+				+ "  ?place geo:lat ?lat .\n"
+				+ "  ?place geo:long ?long .\n"
+				+ "  SERVICE <http://localhost:3000/api>{($.version[*]) AS (?v)} \n"
+				+ "  SERVICE <http://dbpedia.org/sparql> { \n"
+				+ "    ?place rdfs:label ?label . \n"
+				+ "    FILTER(lang(?label) = 'es') . \n"
+    			+ "  } \n"
+    			+ "  SERVICE <http://localhost:3000/api>{($.value_1[*], $.value_2[0]) AS (?t1, ?t2)} \n"
+				+ "}";
+		
+		String load_test = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> \n"
+				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> \n"
+				+ "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> \n"
+				+ "PREFIX xmlns: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> \n"
+				+ "SELECT DISTINCT ?place ?label ?lat ?long ?t1 ?t2 ?v ?country WHERE  {\n"
+				+ "  ?place xmlns:type <http://dbpedia.org/class/yago/Capital108518505> .\n"
+				+ "  ?place geo:lat ?lat \n."
+				+ "  ?place geo:long ?long \n."
+				+ "  SERVICE <http://localhost:3000/api>{($.version[*]) AS (?v)} \n"
+				+ "  SERVICE <http://dbpedia.org/sparql> {\n"
+				+ "    ?place rdfs:label ?label .\n"
+				+ "    FILTER(lang(?label) = 'es') .\n"
+    			+ "  }\n"
+    			+ "  SERVICE <http://localhost:3000/api>{($.value_1[*], $.value_2[0]) AS (?t1, ?t2)} \n"
+				+ "}";
+		String load_test_2 = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
+				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
+				+ "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
+				+ "PREFIX xmlns: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+				+ "SELECT DISTINCT ?place ?label ?lat ?long ?t1 ?t2 ?v ?country WHERE  {"
+				+ "  ?place xmlns:type <http://dbpedia.org/class/yago/Capital108518505> ."
+				+ "  ?place geo:lat ?lat ."
+				+ "  ?place geo:long ?long ."
+				+ "  SERVICE <http://localhost:3000/api>{($.version[*]) AS (?v)}"
+				+ "  SERVICE <http://dbpedia.org/sparql> {"
+				+ "    ?place rdfs:label ?label ."
+				+ "    FILTER(lang(?label) = 'es') ."
+    			+ "  }"
+				+ "}";
 		
 		// Definition of parameters
 		
@@ -112,14 +207,18 @@ public class Main {
 		ArrayList<HashMap<String, String>> params = new ArrayList<HashMap<String,String>>();
 		
 	//	strategy.add(strategy_oauth);
-		strategy.add(strategy_basic);	
+		strategy.add(strategy_basic);
+		strategy.add(strategy_basic);
+		params.add(params1);
 		params.add(params1);
 		
 		
 		// Execution of the query
+		String selected_query = test_service_api_sparql_api;
 		
+//		System.out.println("QUERYING: \n" + selected_query);
 		long start = System.nanoTime();
-		dbw.evaluateSPARQLSon(localAPI_test_simple, strategy, params);
+		dbw.evaluateSPARQLSon(selected_query, strategy, params);
 		long elapsedTime = System.nanoTime() - start;
 		
 		System.out.println("Total: " + elapsedTime / 1000000000.0);
