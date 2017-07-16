@@ -1,14 +1,5 @@
 package SPARQLSon;
 
-import org.apache.jena.query.QueryExecution;
-import org.apache.jena.query.QueryExecutionFactory;
-import org.apache.jena.query.QueryFactory;
-import org.apache.jena.query.QuerySolution;
-import org.apache.jena.query.ResultSet;
-import org.apache.jena.rdf.model.ModelFactory;
-import org.apache.jena.rdf.model.RDFNode;
-import org.apache.jena.sparql.core.DatasetImpl;
-
 /**
  * This is an example built on top of the Jena ARQ library.
  * See: http://jena.sourceforge.net/ARQ/documentation.html
@@ -24,7 +15,7 @@ public class ServiceExampleQuery {
 			"PREFIX movie: <http://data.linkedmdb.org/resource/movie/> \n" +
 			"PREFIX dcterms: <http://purl.org/dc/terms/> \n" +
 
-			"SELECT ?film ?label ?subject WHERE {\n" +
+			"SELECT ?film ?label ?subject ?subject2 WHERE {\n" +
 			"    SERVICE <http://data.linkedmdb.org/sparql> {\n" +
 			"        ?film a movie:film ;\n" +
 			"        	rdfs:label ?label ;\n" +
@@ -35,7 +26,7 @@ public class ServiceExampleQuery {
 			"        ?dbpediaLink dcterms:subject ?subject .\n" +
 			"    }\n" +
 			"}\n" +
-			"LIMIT 50 \n";
+			"LIMIT 100 \n";
 		
 		String query = 
 				  "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> \n"
@@ -54,11 +45,11 @@ public class ServiceExampleQuery {
 		
 		String test = "select * where {?p ?o <http://dbpedia.org/resource/Chile>} limit 10";
 		
-		System.out.println("--QUERYING-- \n" + query);
+		System.out.println("--QUERYING-- \n" + query_movie);
 		long start = System.nanoTime();
 		
 		DatabaseWrapper dbw = new DatabaseWrapper(TDBdirectory);
-		dbw.execQuery(query);
+		dbw.execQuery(query_movie);
 	    long elapsedTime = System.nanoTime() - start;
 		System.out.println("Total: " + elapsedTime / 1000000000.0);		
 	}

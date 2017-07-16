@@ -158,19 +158,18 @@ public class Main {
     			+ "  }\n"
     			+ "  SERVICE <http://localhost:3000/api>{($.value_1[*], $.value_2[0]) AS (?t1, ?t2)} \n"
 				+ "}";
-		String load_test_2 = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
+		String min_API_call_test = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 				+ "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
-				+ "PREFIX xmlns: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
-				+ "SELECT DISTINCT ?place ?label ?lat ?long ?t1 ?t2 ?v ?country WHERE  {"
-				+ "  ?place xmlns:type <http://dbpedia.org/class/yago/Capital108518505> ."
+				+ "SELECT DISTINCT ?place ?label ?lat ?long ?v WHERE  {"
+				+ "  ?place ?link <http://dbpedia.org/resource/Chile> ."
 				+ "  ?place geo:lat ?lat ."
 				+ "  ?place geo:long ?long ."
-				+ "  SERVICE <http://localhost:3000/api>{($.version[*]) AS (?v)}"
 				+ "  SERVICE <http://dbpedia.org/sparql> {"
 				+ "    ?place rdfs:label ?label ."
 				+ "    FILTER(lang(?label) = 'es') ."
     			+ "  }"
+    			+ "  SERVICE <http://localhost:3000/q={label}>{($.object.version[*]) AS (?v)}"
 				+ "}";
 		
 		// Definition of parameters
@@ -195,6 +194,7 @@ public class Main {
 		params1.put("replace_string", "_");
 		params1.put("cache", "false");
 		
+		params1.put("min_api_call", "true");
 		
 		// Definition of strategies to call the API(s)
 		
@@ -214,7 +214,7 @@ public class Main {
 		
 		
 		// Execution of the query
-		String selected_query = test_service_api_sparql_api;
+		String selected_query = min_API_call_test;
 		
 //		System.out.println("QUERYING: \n" + selected_query);
 		long start = System.nanoTime();

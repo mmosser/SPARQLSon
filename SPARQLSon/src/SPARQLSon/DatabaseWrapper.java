@@ -146,10 +146,10 @@ public class DatabaseWrapper {
 		}
 	}
 
-//MM: Changes of type: MappingSet -> ArrayList<MappingSet> to execute a query for each element of JSONArray
 	public MappingSet execQueryGenURL(String queryString, String apiUrlRequest, String[] jpath, 
 			String[] bindName, GetJSONStrategy strategy, 
 			HashMap<String, String> params) throws JSONException, Exception {
+		System.out.println("DEBUG: "+queryString);
 		Query query = QueryFactory.create(queryString);
 		QueryExecution qexec;
 		Dataset dataset;
@@ -185,39 +185,7 @@ public class DatabaseWrapper {
 			for ( ; rs.hasNext() ; ) {
 				QuerySolution rb = rs.nextSolution() ;			
 //				System.out.println("--DEBUG QUERYSOLUTION LOOP-- "+rb+" -- Iteration n° "+(numb_iteration_rs+1));
-				HashMap<String, String> mapping = new HashMap<String, String>();
-// MM change: I create an array of mapping which is gonna be added to each ms
-				ArrayList<HashMap<String, String>> mapping_array = new ArrayList<HashMap<String, String>>();
-//				
-				int mapping_array_size=0;
-
-				for(String var: vars_name) {
-					if (rb.contains(var))
-					{
-						if (rb.get(var).isLiteral())
-						{
-							if(!rb.get(var).asLiteral().getDatatypeURI().equals("http://www.w3.org/2001/XMLSchema#string") && 
-							   !rb.get(var).asLiteral().getDatatypeURI().equals("http://www.w3.org/1999/02/22-rdf-syntax-ns#langString")) {
-								mapping.put(var, rb.get(var).asLiteral().getString());
-							}
-							else {
-								if (!rb.get(var).asLiteral().getLanguage().equals("")) {
-									mapping.put(var, "\"" + rb.get(var).asLiteral().getValue().toString() + "\"@" + rb.get(var).asLiteral().getLanguage());
-								}
-								else {
-									mapping.put(var, "\"" + rb.get(var).asLiteral().getValue().toString() + "\"");
-								}
-							}
-						}
-						else 
-						{
-							mapping.put(var, "<" + rb.get(var).toString() + ">");
-						}
-					}
-					else {
-						mapping.put(var, "UNDEF");
-					}
-				}
+				HashMap<String, String> mapping = mappQuerySolution(rb, vars_name);				
 				String url_req = ApiWrapper.insertValuesURL(apiUrlRequest, rb, params.get("replace_string"));
 				Object json = null;	//MM changed JSONObject to Object because of use of jsonpath
 				try {
@@ -233,61 +201,14 @@ public class DatabaseWrapper {
 					}
 				}
 
-				// TODO: resolve 404 and 429 errors.
 				if (json != null) {
+					ArrayList<HashMap<String, String>> mapping_array = new ArrayList<HashMap<String, String>>();
 					for (int i = 0; i < bindName.length; i++) {
 //						System.out.println("--DEBUG BINDNAME-- "+bindName[i]);
 						try {						
-							Object value = JsonPath.parse(json).read(jpath[i]);							
-							// CASE 1: value.class = Array of Elements
-							if (value.getClass().equals(net.minidev.json.JSONArray.class)){
-								for (int j=0; j<((net.minidev.json.JSONArray)value).size(); j++){		
-									// CASE 1.A: json_nav = first argument
-									if(i==0){
-										Object mapping_clone = mapping.clone();
-										mapping_array.add((HashMap<String, String>)mapping_clone); // I initiate by cloning the mapping I had built into all the mapping_array mappings
-										mapping_array.get(mapping_array.size()-1).put(bindName[i], serializeValue(((net.minidev.json.JSONArray)value).get(j))); // I add to the mapping_array mappings the relative JSON of the JSONArray
-									}
-									// CASE 1.B: json_nav = next arguments
-									else {
-										// I assign to each element of mapping_array the first value of the new argument
-										if(j==0){
-											for (int k=0; k<mapping_array.size(); k++){
-												mapping_array.get(k).put(bindName[i], serializeValue(((net.minidev.json.JSONArray)value).get(j))); // I add to the mapping_array mappings the relative JSON of the JSONArray
-											}
-										}
-										// For each next values, I first "duplicate" the original mapping_array and then assign the value to the duplicate
-										else {
-											for (int k=0; k<mapping_array_size; k++){
-												Object mapping_clone = mapping_array.get(k).clone();
-												mapping_array.add((HashMap<String, String>)mapping_clone);
-												mapping_array.get(mapping_array.size()-1).put(bindName[i], serializeValue(((net.minidev.json.JSONArray)value).get(j)));
-											}
-										}
-										
-									}
-								}	
-							}
-							// CASE 2: value.class = Single Element
-							else {
-								// CASE 2.A: json_nav = first argument
-								if(i==0){
-									mapping.put(bindName[i], serializeValue(value));
-									mapping_array.add(mapping); // the ArrayList has a size=1				
-								}
-								// CASE 2.B: json_nav = next arguments
-								else {
-									for (int k=0; k<mapping_array.size(); k++){
-										mapping_array.get(k).put(bindName[i], serializeValue(value));
-									}
-								}
-							}					
-							mapping_array_size = mapping_array.size();
-							
-						//	System.out.println("--DEBUG CLASS-- \n value: "+value+"\n class:"+value.getClass());
-
+							Object value = JsonPath.parse(json).read(jpath[i]);
+							mapping_array = updateMappingArray(mapping_array, value, bindName[i], i, mapping);					
 						}
-
 						catch (Exception name) {
 							System.out.println("ERROR: " + name);
 							// CASE 0.A: json_nav = first argument
@@ -325,88 +246,100 @@ public class DatabaseWrapper {
 		return ms;
 	}
 	
-	
-	
-	
-//MM TODO?? change the MappingSet into ArrayList<MappingSet>
-	public MappingSet execQueryDistinct(String queryString, HashMap<String, String> params) throws JSONException, Exception {
-		Query query = QueryFactory.create(queryString);
-		Dataset dataset = TDBFactory.createDataset(this.TDBdirectory);
-		QueryExecution qexec = QueryExecutionFactory.create(query, dataset);
-		MappingSet ms = new MappingSet();
-		ArrayList<String> ms_varnames = new ArrayList<String>();
-		try {
-			// Assumption: it's a SELECT query.
-			ResultSet rs = qexec.execSelect() ;
-			List<String> vars_name =  rs.getResultVars();
-			for (String vn: vars_name) {
-				ms_varnames.add(vn);
-			}
-			ms.set_var_names(ms_varnames);
-			// The order of results is undefined. 
-
-			for ( ; rs.hasNext() ; ) {
-
-				QuerySolution rb = rs.nextSolution() ;
-
-				HashMap<String, String> mapping = new HashMap<String, String>();
-				for(String var: vars_name) {
-					if (rb.contains(var))
-					{
-						if (rb.get(var).isLiteral())
-						{
-							if(rb.get(var).asLiteral().getDatatypeURI() != null) {
-								mapping.put(var, rb.get(var).asLiteral().getString());
-							}
-							else {
-								if (!rb.get(var).asLiteral().getLanguage().equals(""))
-								{
-									mapping.put(var, "\"" + rb.get(var).asLiteral().getValue().toString() + "\"@" + rb.get(var).asLiteral().getLanguage());
-								}
-								else {
-									mapping.put(var, "\"" + rb.get(var).asLiteral().getValue().toString() + "\"");
-								}
-							}
-						}
-						else 
-						{
-							mapping.put(var, "<" + rb.get(var).toString() + ">");
-						}
+	public HashMap<String, String> mappQuerySolution(QuerySolution rb, List<String> vars_name) {
+		HashMap<String, String> mapping = new HashMap<String, String>();
+		for(String var: vars_name) {
+			if (rb.contains(var))
+			{
+				if (rb.get(var).isLiteral())
+				{
+					if(!rb.get(var).asLiteral().getDatatypeURI().equals("http://www.w3.org/2001/XMLSchema#string") && 
+					   !rb.get(var).asLiteral().getDatatypeURI().equals("http://www.w3.org/1999/02/22-rdf-syntax-ns#langString")) {
+						mapping.put(var, rb.get(var).asLiteral().getString());
 					}
 					else {
-						mapping.put(var, "UNDEF");
+						if (!rb.get(var).asLiteral().getLanguage().equals("")) {
+							mapping.put(var, "\"" + rb.get(var).asLiteral().getValue().toString() + "\"@" + rb.get(var).asLiteral().getLanguage());
+						}
+						else {
+							mapping.put(var, "\"" + rb.get(var).asLiteral().getValue().toString() + "\"");
+						}
 					}
 				}
-				
-				ms.addMapping(mapping);
-
+				else 
+				{
+					mapping.put(var, "<" + rb.get(var).toString() + ">");
+				}
+			}
+			else {
+				mapping.put(var, "UNDEF");
 			}
 		}
-		finally
-		{
-			// QueryExecution objects should be closed to free any system resources 
-			qexec.close() ;
-			dataset.close();
+		return mapping;
+	}
+	
+	public ArrayList<HashMap<String, String>> updateMappingArray(ArrayList<HashMap<String, String>> mapping_array, Object jsonValue, String bindName, int bindName_index, HashMap<String, String> initial_mapping) {
+		int mapping_array_size = mapping_array.size();
+		// CASE 1: value.class = Array of Elements
+		if (jsonValue.getClass().equals(net.minidev.json.JSONArray.class)){
+			for (int j=0; j<((net.minidev.json.JSONArray)jsonValue).size(); j++){		
+				// CASE 1.A: json_nav = first argument
+				if(bindName_index==0){
+					Object mapping_clone = initial_mapping.clone();
+					mapping_array.add((HashMap<String, String>)mapping_clone); // I initiate by cloning the mapping I had built into all the mapping_array mappings
+					mapping_array.get(mapping_array.size()-1).put(bindName, serializeValue(((net.minidev.json.JSONArray)jsonValue).get(j))); // I add to the mapping_array mappings the relative JSON of the JSONArray
+				}
+				// CASE 1.B: json_nav = next arguments
+				else {
+					// I assign to each element of mapping_array the first value of the new argument
+					if(j==0){
+						for (int k=0; k<mapping_array.size(); k++){
+							mapping_array.get(k).put(bindName, serializeValue(((net.minidev.json.JSONArray)jsonValue).get(j))); // I add to the mapping_array mappings the relative JSON of the JSONArray
+						}
+					}
+					// For each next values, I first "duplicate" the original mapping_array and then assign the value to the duplicate
+					else {
+						for (int k=0; k<mapping_array_size; k++){
+							Object mapping_clone = mapping_array.get(k).clone();
+							mapping_array.add((HashMap<String, String>)mapping_clone);
+							mapping_array.get(mapping_array.size()-1).put(bindName, serializeValue(((net.minidev.json.JSONArray)jsonValue).get(j)));
+						}
+					}
+					
+				}
+			}	
 		}
-		return ms;
+		// CASE 2: value.class = Single Element
+		else {
+			// CASE 2.A: json_nav = first argument
+			if(bindName_index==0){
+				initial_mapping.put(bindName, serializeValue(jsonValue));
+				mapping_array.add(initial_mapping); // the ArrayList has a size=1				
+			}
+			// CASE 2.B: json_nav = next arguments
+			else {
+				for (int k=0; k<mapping_array.size(); k++){
+					mapping_array.get(k).put(bindName, serializeValue(jsonValue));
+				}
+			}
+		}
+		return mapping_array;
 	}
 	
 	public static String serializeValue(Object value) {
-		
 		for (Class c: no_quote_types) {
 			if (value.getClass().equals(c)) {
 				return value.toString();
 			}
 		}
 		return "\"" + value.toString().replace('\n', ' ').replace("\"", "\\\"") + "\"";
-
 	}
 	
 
 	public ResultSet execPostBindQuery(String selectSection, String bodySection, MappingSet ms) {
 		ResultSet rs = null;
 		String queryString = selectSection + ms.serializeAsValues() + bodySection;
-// 		System.out.println(--DEBUG EXECPOSTBINDQUERY-- Querystring: "+queryString);
+// 		System.out.println("--DEBUG EXECPOSTBINDQUERY-- Querystring: "+ queryString);
 		QueryExecution qexec;
 		Dataset dataset;
 		if(!FUSEKI_ENABLED) {
@@ -415,7 +348,6 @@ public class DatabaseWrapper {
 			qexec = QueryExecutionFactory.create(queryString, dataset);
 		}
 		else {
-			// System.out.println("FUSEKI ENABLED");
 			qexec = QueryExecutionFactory.sparqlService("http://localhost:3030/ds", queryString);
 		}
 		try {
@@ -427,7 +359,6 @@ public class DatabaseWrapper {
 		finally
 		{
 			// QueryExecution objects should be closed to free any system resources 
-			// TODO: Resolve what to do with ResultSet rs, actually is useless
 			qexec.close();
 			if (!FUSEKI_ENABLED) {
 				dataset.close();
@@ -455,31 +386,27 @@ public class DatabaseWrapper {
 				String v = names.next();
 				mappingToJson.put(v, rb.get(v));
 			}
-
 			((JSONArray)jsonResponse.getJSONArray("results")).put(mappingToJson);
 			mapping_count++;
-
 		}
 		System.out.println(jsonResponse.toString());
-		
-		
+		System.out.println("Mappings: " + mapping_count);
 	}
 
 	public void evaluateSPARQLSon(String queryString, ArrayList<GetJSONStrategy> strategy, ArrayList<HashMap<String, String>> params, boolean replace) throws JSONException, Exception {
 		strategy.get(0).set_params(params.get(0));
 		HashMap<String, Object> parsedQuery = SPARQLSonParser.parseSPARQLSonQuery(queryString, replace);
-		String firstQuery = apply_params_to_first_query(params, parsedQuery);
 		if (parsedQuery.get("URL")!= null && parsedQuery.get("PATH") != null && parsedQuery.get("ALIAS") != null ) {
-			MappingSet ms = execQueryGenURL(firstQuery, 
-					(String) parsedQuery.get("URL"), 
-					(String[]) parsedQuery.get("PATH"), 
+			String firstQuery = apply_params_to_first_query(params, parsedQuery);
+			if(params.get(0).containsKey("min_api_call") && params.get(0).get("min_api_call").equals("true")) {
+				parsedQuery = minimizeAPICall(parsedQuery);
+				firstQuery = (String) parsedQuery.get("PREFIX") + " SELECT DISTINCT " + parsedQuery.get("VARS") + " WHERE { " + (String) parsedQuery.get("FIRST") + " } ";;
+			}
+			MappingSet ms = execQueryGenURL(firstQuery,
+					(String) parsedQuery.get("URL"),
+					(String[]) parsedQuery.get("PATH"),
 					(String[]) parsedQuery.get("ALIAS"),
 					strategy.get(0), params.get(0));
-			if (params.get(0).containsKey("distinct") && params.get(0).get("distinct").equals("true")) {
-				String new_query = (String) parsedQuery.get("PREFIX") + " SELECT * WHERE{ " +  ms.serializeAsValues() + " " + (String) parsedQuery.get("FIRST") + " } ";
-				ms = execQueryDistinct(new_query, params.get(0));
-			}
-
 			String api_url_string = " +SERVICE +<([\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+)> *\\{ *\\( *(\\$.*$)";	
 			Pattern pattern_variables = Pattern.compile(api_url_string);
 			Matcher m = pattern_variables.matcher(" " + (String) parsedQuery.get("LAST"));
@@ -499,6 +426,85 @@ public class DatabaseWrapper {
 	public void evaluateSPARQLSon(String queryString, ArrayList<GetJSONStrategy> strategy, ArrayList<HashMap<String, String>> params) throws JSONException, Exception {
 		evaluateSPARQLSon(queryString, strategy, params, true);
 	}
+	
+	public HashMap<String, Object> minimizeAPICall(HashMap<String, Object> parsedQuery) {
+		HashMap<String, Object> new_parsedQuery = new HashMap<String, Object>();
+		String selected_variables_string = ((String)parsedQuery.get("SELECT")).split(" \\?", 2)[1];
+		selected_variables_string = selected_variables_string.split(" WHERE", 2)[0];
+		String[] selected_variables = selected_variables_string.split(" \\?");
+		
+		String variable_in_URL = "(.*)=\\{([^\\}]+)\\}.*$";
+		ArrayList<String> needed_variables = new ArrayList<String>();
+		Pattern pattern_variables = Pattern.compile(variable_in_URL);
+		Matcher m = pattern_variables.matcher((String)parsedQuery.get("URL"));
+		while(m.find()){
+			for (int i=0; i< selected_variables.length; i++) {
+				selected_variables[i]=selected_variables[i].trim();
+				if(m.group(2).equals(selected_variables[i])) {
+					needed_variables.add(m.group(2));
+				}
+			}
+			m = pattern_variables.matcher(m.group(1));
+		}
+		ArrayList<TripletParser> firstQueryTriplets = TripletParser.getParsedQuery((String)parsedQuery.get("FIRST"));
+		ArrayList<TripletParser> firstTriplets = new ArrayList<TripletParser>();
+		ArrayList<TripletParser> lastTriplets = (ArrayList<TripletParser>)firstQueryTriplets.clone();
+		String needed_variables_string = "";
+		for (int i =0; i<needed_variables.size(); i++) {
+			needed_variables.set(i, "?" + needed_variables.get(i));
+			needed_variables_string += needed_variables.get(i) + " ";
+		}
+		int iterator = 0;
+		while(iterator < needed_variables.size()) {
+			String var = needed_variables.get(iterator);
+			for (int i=0; i< firstQueryTriplets.size(); i++) {
+				Boolean new_section = true;
+				for (int j=0; j<firstQueryTriplets.get(i).triplets.size(); j++) {
+					int triplet_index = 0;
+					while (triplet_index<3) {
+						System.out.println(var);
+						System.out.println(firstQueryTriplets.get(i).triplets.get(j)[triplet_index]);
+						if(var.equals(firstQueryTriplets.get(i).triplets.get(j)[triplet_index])) {
+							if (new_section) {
+								firstTriplets.add(new TripletParser(firstQueryTriplets.get(i).service_uri, firstQueryTriplets.get(i).triplets.get(j)));
+								new_section = false;
+							}
+							else {
+								firstTriplets.get(firstTriplets.size() -1).addTriplet(firstQueryTriplets.get(i).triplets.get(j));
+							}
+							for (int index = 0; index <3; index++) {
+								boolean alreadyIn = false;
+								for (String var_in: needed_variables) {
+									if(var_in.equals(firstQueryTriplets.get(i).triplets.get(j)[index])) {
+										System.out.println("Already in");
+										alreadyIn = true;
+									}
+								}
+								if(!alreadyIn && index!=triplet_index && firstQueryTriplets.get(i).triplets.get(j)[index].startsWith("?")) {
+									System.out.println(firstQueryTriplets.get(i).triplets.get(j)[index]);
+									needed_variables.add(firstQueryTriplets.get(i).triplets.get(j)[index]);
+								}
+							}
+							lastTriplets.get(i).triplets.remove(j);
+							triplet_index=3;
+						}
+						else {
+							triplet_index +=1;
+						}
+					}
+				}
+			}
+			iterator =+ 1;
+		}
+		new_parsedQuery.put("FIRST", TripletParser.reverseParsedQuery(firstTriplets));
+		new_parsedQuery.put("LAST", TripletParser.reverseParsedQuery(lastTriplets) + (String)parsedQuery.get("LAST"));
+		new_parsedQuery.put("VARS", needed_variables_string);
+		new_parsedQuery.put("PREFIX", parsedQuery.get("PREFIX"));
+		new_parsedQuery.put("SELECT", parsedQuery.get("SELECT"));
+		new_parsedQuery.put("PATH", parsedQuery.get("PATH"));
+		new_parsedQuery.put("ALIAS", parsedQuery.get("ALIAS"));	
+		return new_parsedQuery;
+	}
 
 	public String apply_params_to_first_query(ArrayList<HashMap<String, String>> params, HashMap<String, Object> parsedQuery) throws JSONException, Exception {
 		String new_query = "";
@@ -507,11 +513,12 @@ public class DatabaseWrapper {
 		}
 		else {
 			new_query = (String) parsedQuery.get("PREFIX") + " SELECT * WHERE { " + (String) parsedQuery.get("FIRST") + " } ";
+			System.out.println(new_query);
 		}
 		if (params.get(0).containsKey("limit")) {
 			new_query += "LIMIT " + params.get(0).get("limit") + " ";
 		}
-		return new_query;		
+		return new_query;
 	}
 	
 	public Object retrieve_json(String url_req, HashMap<String,String> params, GetJSONStrategy strategy) throws JSONException, Exception {

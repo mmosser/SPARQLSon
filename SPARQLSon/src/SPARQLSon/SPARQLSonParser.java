@@ -14,7 +14,7 @@ public class SPARQLSonParser {
 	 */
 	public static HashMap<String, Object> parseSPARQLSonQuery(String queryString, boolean replace) {
 		String[] firstParse = getSelectSection(queryString, replace);
-		HashMap<String, Object> querySections = getBindSection(firstParse[2]);
+		HashMap<String, Object> querySections = getAPIServiceSection(firstParse[2]);
 		querySections.put("PREFIX", firstParse[0]);
 		querySections.put("SELECT", firstParse[1]);
 		return querySections;
@@ -62,7 +62,7 @@ public class SPARQLSonParser {
 	 * @param {String} postSelectSection
 	 * @return {HashMap<String, Object>}
 	 */
-	public static HashMap<String, Object> getBindSection(String postSelectSection) {
+	public static HashMap<String, Object> getAPIServiceSection(String postSelectSection) {
 		/* 
 		 * Regex to match the format of a SERVICE call to an API:
 		 * This format is: FIRST SERVICE <URL> {($.PATH1, $.PATH2) AS (ALIAS1, ALIAS 2)} LAST
@@ -121,6 +121,8 @@ public class SPARQLSonParser {
 			}
 		}
 		return bindSections;
+	}
+	
 
 /*
  * OLD CODE
@@ -154,6 +156,6 @@ public class SPARQLSonParser {
 //		bindSections.put("ALIAS", aliases);
 //		bindSections.put("PATH", json_navs);
 //		return bindSections;
-	}
+//	}
 	
 }
