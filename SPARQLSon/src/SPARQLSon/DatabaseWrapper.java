@@ -149,7 +149,7 @@ public class DatabaseWrapper {
 	public MappingSet execQueryGenURL(String queryString, String apiUrlRequest, String[] jpath, 
 			String[] bindName, GetJSONStrategy strategy, 
 			HashMap<String, String> params) throws JSONException, Exception {
-		System.out.println("DEBUG: "+queryString);
+		System.out.println(queryString);
 		Query query = QueryFactory.create(queryString);
 		QueryExecution qexec;
 		Dataset dataset;
@@ -399,7 +399,7 @@ public class DatabaseWrapper {
 		if (parsedQuery.get("URL")!= null && parsedQuery.get("PATH") != null && parsedQuery.get("ALIAS") != null ) {
 			String firstQuery = apply_params_to_first_query(params, parsedQuery);
 			if(params.get(0).containsKey("min_api_call") && params.get(0).get("min_api_call").equals("true")) {
-				parsedQuery = minimizeAPICall(parsedQuery);
+				parsedQuery = Optimizer.minimizeAPICall(parsedQuery);
 				firstQuery = (String) parsedQuery.get("PREFIX") + " SELECT DISTINCT " + parsedQuery.get("VARS") + " WHERE { " + (String) parsedQuery.get("FIRST") + " } ";;
 			}
 			MappingSet ms = execQueryGenURL(firstQuery,
@@ -415,7 +415,7 @@ public class DatabaseWrapper {
 				evaluateSPARQLSon(recursive_query_string, new ArrayList<GetJSONStrategy>(strategy.subList(1, strategy.size())), new ArrayList<HashMap<String,String>>(params.subList(1, params.size())), false);
 			}
 			else {
-				execPostBindQuery((String) parsedQuery.get("SELECT"), (String) parsedQuery.get("LAST"), ms);
+				execPostBindQuery((String) parsedQuery.get("PREFIX") + (String) parsedQuery.get("SELECT"), (String) parsedQuery.get("LAST"), ms);
 			}
 		}
 		else {
@@ -426,85 +426,6 @@ public class DatabaseWrapper {
 	public void evaluateSPARQLSon(String queryString, ArrayList<GetJSONStrategy> strategy, ArrayList<HashMap<String, String>> params) throws JSONException, Exception {
 		evaluateSPARQLSon(queryString, strategy, params, true);
 	}
-	
-	public HashMap<String, Object> minimizeAPICall(HashMap<String, Object> parsedQuery) {
-		HashMap<String, Object> new_parsedQuery = new HashMap<String, Object>();
-		String selected_variables_string = ((String)parsedQuery.get("SELECT")).split(" \\?", 2)[1];
-		selected_variables_string = selected_variables_string.split(" WHERE", 2)[0];
-		String[] selected_variables = selected_variables_string.split(" \\?");
-		
-		String variable_in_URL = "(.*)=\\{([^\\}]+)\\}.*$";
-		ArrayList<String> needed_variables = new ArrayList<String>();
-		Pattern pattern_variables = Pattern.compile(variable_in_URL);
-		Matcher m = pattern_variables.matcher((String)parsedQuery.get("URL"));
-		while(m.find()){
-			for (int i=0; i< selected_variables.length; i++) {
-				selected_variables[i]=selected_variables[i].trim();
-				if(m.group(2).equals(selected_variables[i])) {
-					needed_variables.add(m.group(2));
-				}
-			}
-			m = pattern_variables.matcher(m.group(1));
-		}
-		ArrayList<TripletParser> firstQueryTriplets = TripletParser.getParsedQuery((String)parsedQuery.get("FIRST"));
-		ArrayList<TripletParser> firstTriplets = new ArrayList<TripletParser>();
-		ArrayList<TripletParser> lastTriplets = (ArrayList<TripletParser>)firstQueryTriplets.clone();
-		String needed_variables_string = "";
-		for (int i =0; i<needed_variables.size(); i++) {
-			needed_variables.set(i, "?" + needed_variables.get(i));
-			needed_variables_string += needed_variables.get(i) + " ";
-		}
-		int iterator = 0;
-		while(iterator < needed_variables.size()) {
-			String var = needed_variables.get(iterator);
-			for (int i=0; i< firstQueryTriplets.size(); i++) {
-				Boolean new_section = true;
-				for (int j=0; j<firstQueryTriplets.get(i).triplets.size(); j++) {
-					int triplet_index = 0;
-					while (triplet_index<3) {
-						System.out.println(var);
-						System.out.println(firstQueryTriplets.get(i).triplets.get(j)[triplet_index]);
-						if(var.equals(firstQueryTriplets.get(i).triplets.get(j)[triplet_index])) {
-							if (new_section) {
-								firstTriplets.add(new TripletParser(firstQueryTriplets.get(i).service_uri, firstQueryTriplets.get(i).triplets.get(j)));
-								new_section = false;
-							}
-							else {
-								firstTriplets.get(firstTriplets.size() -1).addTriplet(firstQueryTriplets.get(i).triplets.get(j));
-							}
-							for (int index = 0; index <3; index++) {
-								boolean alreadyIn = false;
-								for (String var_in: needed_variables) {
-									if(var_in.equals(firstQueryTriplets.get(i).triplets.get(j)[index])) {
-										System.out.println("Already in");
-										alreadyIn = true;
-									}
-								}
-								if(!alreadyIn && index!=triplet_index && firstQueryTriplets.get(i).triplets.get(j)[index].startsWith("?")) {
-									System.out.println(firstQueryTriplets.get(i).triplets.get(j)[index]);
-									needed_variables.add(firstQueryTriplets.get(i).triplets.get(j)[index]);
-								}
-							}
-							lastTriplets.get(i).triplets.remove(j);
-							triplet_index=3;
-						}
-						else {
-							triplet_index +=1;
-						}
-					}
-				}
-			}
-			iterator =+ 1;
-		}
-		new_parsedQuery.put("FIRST", TripletParser.reverseParsedQuery(firstTriplets));
-		new_parsedQuery.put("LAST", TripletParser.reverseParsedQuery(lastTriplets) + (String)parsedQuery.get("LAST"));
-		new_parsedQuery.put("VARS", needed_variables_string);
-		new_parsedQuery.put("PREFIX", parsedQuery.get("PREFIX"));
-		new_parsedQuery.put("SELECT", parsedQuery.get("SELECT"));
-		new_parsedQuery.put("PATH", parsedQuery.get("PATH"));
-		new_parsedQuery.put("ALIAS", parsedQuery.get("ALIAS"));	
-		return new_parsedQuery;
-	}
 
 	public String apply_params_to_first_query(ArrayList<HashMap<String, String>> params, HashMap<String, Object> parsedQuery) throws JSONException, Exception {
 		String new_query = "";
@@ -513,7 +434,6 @@ public class DatabaseWrapper {
 		}
 		else {
 			new_query = (String) parsedQuery.get("PREFIX") + " SELECT * WHERE { " + (String) parsedQuery.get("FIRST") + " } ";
-			System.out.println(new_query);
 		}
 		if (params.get(0).containsKey("limit")) {
 			new_query += "LIMIT " + params.get(0).get("limit") + " ";

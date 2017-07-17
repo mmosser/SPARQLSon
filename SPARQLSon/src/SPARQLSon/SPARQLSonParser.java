@@ -84,7 +84,7 @@ public class SPARQLSonParser {
 			 * Matched groups are: Group 1: ALIAS1, ALIAS 2		Group 2: LAST
 			 * regexr.com: \) *AS *\(((?: *\?[\d\w]+ *,* *)*)\) *\}(.*)$
 			 */
-			String post_api_url_string = "\\) *AS *\\(((?: *\\?[\\d\\w]+ *,* *)*)\\) *\\}(.*)$";
+			String post_api_url_string = "\\) *AS *\\(((?: *\\?[\\d\\w]+ *,* *)*)\\) *\\} *\\.*(.*)$";
 			
 			// Divide the Group 2 of m1 to keep only the PATH section of the query
 			dividedQuery = m1.group(2).split(post_api_url_string, 2);

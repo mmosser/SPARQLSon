@@ -89,7 +89,6 @@ public class Main {
 		
 		String test_service_sparql = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
-				+ "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
 				+ "SELECT DISTINCT ?place ?label ?lat ?long WHERE  {"
 				+ "  ?place ?link <http://dbpedia.org/resource/Chile> ."
 				+ "  ?place geo:lat ?lat ."
@@ -102,7 +101,6 @@ public class Main {
 		
 		String test_service_sparql_api = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
-				+ "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
 				+ "SELECT DISTINCT ?place ?label ?lat ?long ?v WHERE  {"
 				+ "  ?place ?link <http://dbpedia.org/resource/Chile> ."
 				+ "  ?place geo:lat ?lat ."
@@ -116,7 +114,6 @@ public class Main {
 		
 		String test_service_api_sparql = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
-				+ "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
 				+ "SELECT DISTINCT ?place ?label ?lat ?long ?v WHERE  {"
 				+ "  ?place ?link <http://dbpedia.org/resource/Chile> ."
 				+ "  ?place geo:lat ?lat ."
@@ -130,7 +127,6 @@ public class Main {
 		
 		String test_service_api_sparql_api = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> \n"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> \n"
-				+ "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> \n"
 				+ "SELECT DISTINCT ?place ?label ?lat ?long ?t1 ?t2 ?v WHERE  { \n"
 				+ "  ?place ?link <http://dbpedia.org/resource/Chile> .\n"
 				+ "  ?place geo:lat ?lat .\n"
@@ -145,7 +141,6 @@ public class Main {
 		
 		String load_test = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> \n"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> \n"
-				+ "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> \n"
 				+ "PREFIX xmlns: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> \n"
 				+ "SELECT DISTINCT ?place ?label ?lat ?long ?t1 ?t2 ?v ?country WHERE  {\n"
 				+ "  ?place xmlns:type <http://dbpedia.org/class/yago/Capital108518505> .\n"
@@ -160,16 +155,17 @@ public class Main {
 				+ "}";
 		String min_API_call_test = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
-				+ "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
 				+ "SELECT DISTINCT ?place ?label ?lat ?long ?v WHERE  {"
-				+ "  ?place ?link <http://dbpedia.org/resource/Chile> ."
+				+ "  SERVICE <http://dbpedia.org/sparql> {"
+				+ "    ?place <http://dbpedia.org/ontology/country> <http://dbpedia.org/resource/Chile> ."
+				+ "  } ."
 				+ "  ?place geo:lat ?lat ."
 				+ "  ?place geo:long ?long ."
 				+ "  SERVICE <http://dbpedia.org/sparql> {"
 				+ "    ?place rdfs:label ?label ."
 				+ "    FILTER(lang(?label) = 'es') ."
-    			+ "  }"
-    			+ "  SERVICE <http://localhost:3000/q={label}>{($.object.version[*]) AS (?v)}"
+    			+ "  } ."
+    			+ "  SERVICE <http://localhost:3000/q={label}>{($.object.version[*]) AS (?v)} ."
 				+ "}";
 		
 		// Definition of parameters

@@ -1,7 +1,6 @@
 package SPARQLSon;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -17,7 +16,6 @@ public class TripletParser {
 	/*
 	 * CONSTRUCTORS
 	 */
-	
 	public TripletParser(String service_uri, ArrayList<String[]> triplets) {
 		if(service_uri!=null) {
 			this.section_type = "sparql_service";
@@ -58,7 +56,6 @@ public class TripletParser {
 		Pattern pattern_triplet = Pattern.compile(triplet_regex);
 		Matcher matcherTriplet = pattern_triplet.matcher(queryPart);
 		while(matcherTriplet.find()) {
-			System.out.println("TRIPLET: "+matcherTriplet.group(1)+" "+ matcherTriplet.group(2)+ " "+ matcherTriplet.group(3));
 			String[] triplets = new String[]{matcherTriplet.group(1), matcherTriplet.group(2), matcherTriplet.group(3)};
 			this.triplets.add(triplets);
 		}
@@ -72,7 +69,6 @@ public class TripletParser {
 		Pattern pattern_triplet = Pattern.compile(triplet_regex);
 		Matcher matcherTriplet = pattern_triplet.matcher(queryPart);
 		while(matcherTriplet.find()) {
-			System.out.println("TRIPLET: "+matcherTriplet.group(1)+" "+ matcherTriplet.group(2)+ " "+ matcherTriplet.group(3));
 			String[] triplets = new String[]{matcherTriplet.group(1), matcherTriplet.group(2), matcherTriplet.group(3)};
 			this.triplets.add(triplets);
 		}
@@ -81,17 +77,28 @@ public class TripletParser {
 	/*
 	 * METHODS
 	 */
+
+	/* 
+	 * FUNCTION: Add a triplet
+	 * @param {String[]} triplet
+	 * @return {}
+	 */
 	public void addTriplet(String[] triplet) {
 		this.triplets.add(triplet);
 	}
 	
-	public static ArrayList<TripletParser> getParsedQuery(String firstQuerySection) {
+	/* 
+	 * FUNCTION: Parse a SPARQL Query section into a list of TripletParsers
+	 * @param {String} sparqlQuerySection
+	 * @return {ArrayList<TripletParser>}
+	 */
+	public static ArrayList<TripletParser> getParsedQuery(String sparqlQuerySection) {
 		ArrayList<TripletParser> parsedFirstQuery = new ArrayList<TripletParser>();
 		String api_url_string = "(.*) +SERVICE +<([\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+)> *\\{([^\\}]*)\\} *(.*$)";
 		Pattern pattern_variables = Pattern.compile(api_url_string);
 		String triplet_regex = "(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) (<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) (<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+)";
 		Pattern pattern_triplet = Pattern.compile(triplet_regex);
-		String query_string = firstQuerySection;
+		String query_string = sparqlQuerySection;
 		Matcher m = pattern_variables.matcher(query_string);
 		while(m.find()) {
 			Matcher matcherTriplet = pattern_triplet.matcher(m.group(4));
@@ -113,6 +120,11 @@ public class TripletParser {
 		return parsedFirstQuery;
 	}
 	
+	/* 
+	 * FUNCTION: Transform a list of TripletParsers into a SPARQL Query section
+	 * @param {ArrayList<TripletParser>} parsedTriplets
+	 * @return {String}
+	 */
 	public static String reverseParsedQuery(ArrayList<TripletParser> parsedTriplets) {
 		String query= "";
 		for (int i=0; i<parsedTriplets.size();i++) {
@@ -123,7 +135,7 @@ public class TripletParser {
 				}
 				triplets_string += ". ";
 			}
-			if(parsedTriplets.get(i).section_type == "sparql_service") {
+			if(parsedTriplets.get(i).section_type == "sparql_service" && triplets_string!="") {
 				query += "SERVICE <" + parsedTriplets.get(i).service_uri + "> {" + triplets_string + "} " ;
 			}
 			else {
@@ -133,7 +145,9 @@ public class TripletParser {
 		return query;
 	}
 
-	
+	/*
+	 * TESTS
+	 */
 	public static void main(String[] args) throws Exception {
 		
 		String test =
