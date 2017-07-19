@@ -27,11 +27,9 @@ import org.json.JSONObject;
 import com.jayway.jsonpath.JsonPath;
 
 
-
-
-
 public class DatabaseWrapper {
-
+	
+	int ApiCalls;
 	String TDBdirectory;
 	long timeApi;
 	ArrayList<String> cacheKeys;
@@ -47,6 +45,7 @@ public class DatabaseWrapper {
 		this.cacheKeys = new ArrayList<String>();
 		this.cache = new HashMap<>();
 		this.timeApi = 0;
+		this.ApiCalls = 0;
 	}
 
 	public void createDataset(String source, String format) {
@@ -65,7 +64,6 @@ public class DatabaseWrapper {
 			qexec = QueryExecutionFactory.create(query, dataset);
 		}
 		else {
-			// System.out.println("FUSEKI ENABLED");
 			qexec = QueryExecutionFactory.sparqlService("http://localhost:3030/ds", query);
 		}
 		try {
@@ -74,31 +72,20 @@ public class DatabaseWrapper {
 			JSONObject jsonResponse = new JSONObject();
 			jsonResponse.put("results", new JSONArray());
 			jsonResponse.put("vars", rs.getResultVars());
-			
-
 			// The order of results is undefined. 
-			int mapping_count = 1;
+			int mapping_count = 0;
 			for ( ; rs.hasNext() ; ) {
 				JSONObject mappingToJSON = new JSONObject();
-
 				QuerySolution rb = rs.nextSolution() ;
-
-				// System.out.println("### Mapping no. " + mapping_count + " ###");
-
 				// Get title - variable names do not include the '?' (or '$')
 				for (String v: rs.getResultVars()) {	
-					// System.out.println("Variable: " + v + ", Value: " + rb.get(v));
 					mappingToJSON.put(v, rb.get(v));
-
 				}
-				// ((JSONArray)jsonResponse.get("results")).put(mappingToJSON);
-
-				// System.out.println("######");
-				mapping_count++;
 				((JSONArray)jsonResponse.get("results")).put(mappingToJSON);
-
+				mapping_count++;
 			}
 			System.out.println(jsonResponse.toString());
+			System.out.println("Mappings: "+mapping_count);
 		}
 		finally
 		{
@@ -117,25 +104,17 @@ public class DatabaseWrapper {
 		try {
 			// Assumption: it's a SELECT query.
 			ResultSet rs = qexec.execSelect();
-			
-
 			// The order of results is undefined. 
-			int mapping_count = 1;
+			int mapping_number = 1;
 			for ( ; rs.hasNext() ; ) {
-
 				QuerySolution rb = rs.nextSolution() ;
-
-				System.out.println("### Mapping no. " + mapping_count + " ###");
-
+				System.out.println("### Mapping no. " + mapping_number + " ###");
 				// Get title - variable names do not include the '?' (or '$')
 				for (String v: variables) {	
 					System.out.println("Variable: " + v + ", Value: " + rb.get(v));
-
 				}
-
 				System.out.println("######");
-				mapping_count++;
-
+				mapping_number++;
 			}
 		}
 		finally
@@ -158,12 +137,8 @@ public class DatabaseWrapper {
 			qexec = QueryExecutionFactory.create(query, dataset);
 		}
 		else {
-			// System.out.println("FUSEKI ENABLED");
 			qexec = QueryExecutionFactory.sparqlService("http://localhost:3030/ds", query);
 		}
-//MM change: I create an array of ms which will be what I return
-//		ArrayList<MappingSet> ms_array = new ArrayList<MappingSet>();
-//
 		MappingSet ms = new MappingSet();
 		int numb_mappings=0;
 		ArrayList<String> ms_varnames = new ArrayList<String>();
@@ -180,14 +155,11 @@ public class DatabaseWrapper {
 			}
 			ms.set_var_names(ms_varnames);
 			// The order of results is undefined. 
-			
-			int numb_iteration_rs=0;
 			for ( ; rs.hasNext() ; ) {
-				QuerySolution rb = rs.nextSolution() ;			
-//				System.out.println("--DEBUG QUERYSOLUTION LOOP-- "+rb+" -- Iteration n° "+(numb_iteration_rs+1));
+				QuerySolution rb = rs.nextSolution() ;	
 				HashMap<String, String> mapping = mappQuerySolution(rb, vars_name);				
 				String url_req = ApiWrapper.insertValuesURL(apiUrlRequest, rb, params.get("replace_string"));
-				Object json = null;	//MM changed JSONObject to Object because of use of jsonpath
+				Object json = null;
 				try {
 					long start = System.nanoTime();
 					json = retrieve_json(url_req, params, strategy);
@@ -200,11 +172,9 @@ public class DatabaseWrapper {
 						mapping.put(bindName[i], "UNDEF");
 					}
 				}
-
 				if (json != null) {
 					ArrayList<HashMap<String, String>> mapping_array = new ArrayList<HashMap<String, String>>();
 					for (int i = 0; i < bindName.length; i++) {
-//						System.out.println("--DEBUG BINDNAME-- "+bindName[i]);
 						try {						
 							Object value = JsonPath.parse(json).read(jpath[i]);
 							mapping_array = updateMappingArray(mapping_array, value, bindName[i], i, mapping);					
@@ -230,8 +200,6 @@ public class DatabaseWrapper {
 						numb_mappings += +1;
 					}
 				}
-			// Increment the number of iterations on results rb from the ResultSet rs
-			numb_iteration_rs += 1;
 			}
 		}
 		finally
@@ -242,7 +210,6 @@ public class DatabaseWrapper {
 				dataset.close();
 			}
 		}
-		System.out.println("--DEBUG FINAL MAPPINGSET-- \n ms: "+ms.serializeAsValues()+"\n Number of mappings: "+numb_mappings);
 		return ms;
 	}
 	
@@ -376,10 +343,6 @@ public class DatabaseWrapper {
 		for ( ; rs.hasNext() ; ) {
 			JSONObject mappingToJson = new JSONObject();
 			QuerySolution rb = rs.nextSolution() ;
-			
-
-			//System.out.println("### Mapping no. " + mapping_count + " ###");
-
 			// Get title - variable names do not include the '?' (or '$')
 			Iterator<String> names = rb.varNames();
 			while (names.hasNext()) {	
@@ -399,8 +362,13 @@ public class DatabaseWrapper {
 		if (parsedQuery.get("URL")!= null && parsedQuery.get("PATH") != null && parsedQuery.get("ALIAS") != null ) {
 			String firstQuery = apply_params_to_first_query(params, parsedQuery);
 			if(params.get(0).containsKey("min_api_call") && params.get(0).get("min_api_call").equals("true")) {
-				parsedQuery = Optimizer.minimizeAPICall(parsedQuery);
-				firstQuery = (String) parsedQuery.get("PREFIX") + " SELECT DISTINCT " + parsedQuery.get("VARS") + " WHERE { " + (String) parsedQuery.get("FIRST") + " } ";;
+				parsedQuery = ApiOptimizer.minimizeAPICall(parsedQuery);
+				if (parsedQuery.get("VARS").toString().length()>0) {
+					firstQuery = (String) parsedQuery.get("PREFIX") + " SELECT DISTINCT " + parsedQuery.get("VARS") + " WHERE {" + (String) parsedQuery.get("FIRST") + "} ";;
+				}
+				else {
+					firstQuery = (String) parsedQuery.get("PREFIX") + " SELECT * " + " WHERE {" + (String) parsedQuery.get("FIRST") + "} ";;
+				}
 			}
 			MappingSet ms = execQueryGenURL(firstQuery,
 					(String) parsedQuery.get("URL"),
@@ -415,7 +383,7 @@ public class DatabaseWrapper {
 				evaluateSPARQLSon(recursive_query_string, new ArrayList<GetJSONStrategy>(strategy.subList(1, strategy.size())), new ArrayList<HashMap<String,String>>(params.subList(1, params.size())), false);
 			}
 			else {
-				execPostBindQuery((String) parsedQuery.get("PREFIX") + (String) parsedQuery.get("SELECT"), (String) parsedQuery.get("LAST"), ms);
+				execPostBindQuery((String) parsedQuery.get("PREFIX") + " " + (String) parsedQuery.get("SELECT"), (String) parsedQuery.get("LAST"), ms);
 			}
 		}
 		else {
@@ -447,6 +415,7 @@ public class DatabaseWrapper {
 				return cache.get(url_req);
 			}
 			else {
+				this.ApiCalls += 1;
 				Object json =  ApiWrapper.getJSON(url_req, params, strategy);
 				if (cacheKeys.size() < CACHE_SIZE) {
 					cacheKeys.add(url_req);
@@ -461,6 +430,7 @@ public class DatabaseWrapper {
 			}
 		}
 		else {
+			this.ApiCalls += 1;
 			return ApiWrapper.getJSON(url_req, params, strategy);
 		}
 	}

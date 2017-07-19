@@ -11,13 +11,9 @@ public class Main {
 	public static void main(String[] args) throws Exception {
 		
 		// Database loading
-		
 		String TDBdirectory = "C:/Users/matth/Documents/UC/PROYECTO MAGISTER/Dev-magister/db";
 		DatabaseWrapper dbw = new DatabaseWrapper(TDBdirectory);
-		
-//		String TDBServiceDirectory = "C:/Users/matth/Documents/UC/PROYECTO MAGISTER/Dev-magister/dbService";
-//		DatabaseWrapper dbwService = new DatabaseWrapper(TDBServiceDirectory);
-		
+				
 		// Examples of query using the BIND_API function
 		
 		String query_yelp = "SELECT ?x ?n ?b ?r WHERE {?x <http://yago-knowledge.org/resource/isLocatedIn> <http://yago-knowledge.org/resource/Chile> .  ?x <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://yago-knowledge.org/resource/wikicat_Communes_of_Chile> . ?x <http://www.w3.org/2000/01/rdf-schema#label> ?n  " +
@@ -155,9 +151,11 @@ public class Main {
 				+ "}";
 		String min_API_call_test = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
-				+ "SELECT DISTINCT ?place ?label ?lat ?long ?v WHERE  {"
+				+ "SELECT DISTINCT ?place ?label ?lat ?long ?latCountry ?longCountry ?v WHERE  {"
 				+ "  SERVICE <http://dbpedia.org/sparql> {"
 				+ "    ?place <http://dbpedia.org/ontology/country> <http://dbpedia.org/resource/Chile> ."
+				+ "    <http://dbpedia.org/resource/Chile> geo:lat ?latCountry ."
+				+ "    <http://dbpedia.org/resource/Chile> geo:long ?longCountry ."
 				+ "  } ."
 				+ "  ?place geo:lat ?lat ."
 				+ "  ?place geo:long ?long ."
@@ -210,13 +208,14 @@ public class Main {
 		
 		
 		// Execution of the query
-		String selected_query = min_API_call_test;
+		String selected_query = test_service_api_sparql_api;
 		
 //		System.out.println("QUERYING: \n" + selected_query);
 		long start = System.nanoTime();
 		dbw.evaluateSPARQLSon(selected_query, strategy, params);
 		long elapsedTime = System.nanoTime() - start;
 		
+		System.out.println("API Calls: " + dbw.ApiCalls);
 		System.out.println("Total: " + elapsedTime / 1000000000.0);
 		System.out.println("API: " + dbw.timeApi / 1000000000.0);
 		elapsedTime = elapsedTime - dbw.timeApi;	
