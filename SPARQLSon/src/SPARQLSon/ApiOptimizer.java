@@ -5,14 +5,74 @@ import java.util.HashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.json.JSONException;
+
 public class ApiOptimizer {
+	
+	/*
+	 * PROPERTIES
+	 */
+	
+	int apiCalls;
+	long timeApi;
+	ArrayList<String> cacheKeys;
+	HashMap<String, Object> cache;
+	static final int CACHE_SIZE = 400;
+	
+	/*
+	 * CONSTRUCTORS
+	 */
+	
+	public ApiOptimizer() {
+		this.cacheKeys = new ArrayList<String>();
+		this.cache = new HashMap<>();
+		this.timeApi = 0;
+		this.apiCalls = 0;
+	}
+	
+	/*
+	 * METHODS
+	 */
+	
+	/*
+	 * FUNCTION: Apply the cache option to retrieve the JSON response
+	 * @param {String} url_req
+	 * @param {HashMap<String, String>} params
+	 * @param {GetJSONStrategy} strategy
+	 * @return {Object}
+	 */
+	public Object retrieve_json(String url_req, HashMap<String,String> params, GetJSONStrategy strategy) throws JSONException, Exception {
+		if (params.containsKey("cache") && params.get("cache").equals("true")) {
+			if (cache.containsKey(url_req)) {
+				return cache.get(url_req);
+			}
+			else {
+				this.apiCalls += 1;
+				Object json =  ApiWrapper.getJSON(url_req, params, strategy);
+				if (cacheKeys.size() < CACHE_SIZE) {
+					cacheKeys.add(url_req);
+					cache.put(url_req, json);
+				}
+				else {
+					String removed_key = cacheKeys.remove(0);
+					cache.remove(removed_key);
+					cache.put(url_req, json);
+				}
+				return json;
+			}
+		}
+		else {
+			this.apiCalls += 1;
+			return ApiWrapper.getJSON(url_req, params, strategy);
+		}
+	}
 
 	/*
 	 * FUNCTION: Transform the parsed query to minimize the number of calls to API by Service
 	 * @param {HashMap<String, Object>} parsedQuery
 	 * @return {HashMap<String, Object>}
 	 */
-	public static HashMap<String, Object> minimizeAPICall(HashMap<String, Object> parsedQuery) {
+	public HashMap<String, Object> minimizeAPICall(HashMap<String, Object> parsedQuery) {
 		// Look for inserted variables in the URL of the API-Service call and keep them
 		String variable_in_URL = "(.*)=\\{([^\\}]+)\\}.*$";
 		ArrayList<String> inserted_variables = new ArrayList<String>();
@@ -85,7 +145,7 @@ public class ApiOptimizer {
 	 * @param {ArrayList<TripletParser>} list_parsed_triplets
 	 * @return {HashMap<String, Object>}
 	 */
-	public static HashMap<String, Object> ejectIncludingTriplets(ArrayList<String> vars, ArrayList<TripletParser> list_parsed_triplets) {
+	public HashMap<String, Object> ejectIncludingTriplets(ArrayList<String> vars, ArrayList<TripletParser> list_parsed_triplets) {
 		ArrayList<String> linked_variables = new ArrayList<String>();
 		ArrayList<TripletParser> selected_triplets = new ArrayList<TripletParser>();
 		// Iterate over the inserted variables
@@ -129,7 +189,7 @@ public class ApiOptimizer {
 	 * @param {ArrayList<TripletParser>} list_parsed_triplets
 	 * @return {ArrayList<TripletParser>}
 	 */
-	public static ArrayList<TripletParser> ejectConstrainingTriplets(ArrayList<String> vars, ArrayList<TripletParser> list_parsed_triplets) {
+	public ArrayList<TripletParser> ejectConstrainingTriplets(ArrayList<String> vars, ArrayList<TripletParser> list_parsed_triplets) {
 		ArrayList<TripletParser> selected_triplets = new ArrayList<TripletParser>();
 		// Iterate over the linked variables
 		for (String var: vars) {
@@ -171,7 +231,7 @@ public class ApiOptimizer {
 	 * @param {ArrayList<TripletParser>} list_parsed_triplets
 	 * @return {ArrayList<TripletParser>}
 	 */
-	public static void ejectIndependantTriplets(ArrayList<String> vars, ArrayList<TripletParser> list_parsed_triplets) {
+	public void ejectIndependantTriplets(ArrayList<String> vars, ArrayList<TripletParser> list_parsed_triplets) {
 		// Create a local list of variables
 		ArrayList<String> local_vars = new ArrayList<String>();
 		local_vars.addAll(vars);

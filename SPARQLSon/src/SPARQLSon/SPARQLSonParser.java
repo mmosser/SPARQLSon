@@ -108,8 +108,14 @@ public class SPARQLSonParser {
 				}
 				bindSections.put("ALIAS", aliases);
 				String post_aliases_string = m2.group(2).trim();
-				bindSections.put("LAST", post_aliases_string);
-				
+				String options_regex = "(.*\\})([^\\}]*$)";
+				String options_section = "";
+				pattern_variables = Pattern.compile(options_regex);
+				Matcher m = pattern_variables.matcher(post_aliases_string);
+				if (m.find()) {
+					bindSections.put("LAST", m.group(1));
+					bindSections.put("OPTIONS", m.group(2));
+				}
 				/*
 				 * Show the distinct sections of the query
 				 */
@@ -117,7 +123,7 @@ public class SPARQLSonParser {
 				System.out.println("FIRST: "+ bindSections.get("FIRST"));
 				System.out.println("PATH: "+ json_nav_string);
 				System.out.println("ALIAS: "+ aliases_string);
-				System.out.println("LAST: "+ post_aliases_string);
+				System.out.println("LAST: "+ bindSections.get("LAST"));
 			}
 		}
 		return bindSections;

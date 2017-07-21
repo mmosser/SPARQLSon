@@ -147,8 +147,9 @@ public class Main {
 				+ "    ?place rdfs:label ?label .\n"
 				+ "    FILTER(lang(?label) = 'es') .\n"
     			+ "  }\n"
-    			+ "  SERVICE <http://localhost:3000/api>{($.value_1[*], $.value_2[0]) AS (?t1, ?t2)} \n"
-				+ "}";
+    			+ "  SERVICE <http://localhost:3000/q={label}>{($.object.value_1[*], $.object.value_2[0]) AS (?t1, ?t2)} \n"
+				+ "}"
+				+ "LIMIT 1000";
 		String min_API_call_test = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 				+ "SELECT DISTINCT ?place ?label ?lat ?long ?latCountry ?longCountry ?v WHERE  {"
@@ -188,7 +189,8 @@ public class Main {
 		params1.put("replace_string", "_");
 		params1.put("cache", "false");
 		
-		params1.put("min_api_call", "true");
+//		params1.put("min_api_call", "true");
+		params1.put("pipeline", "true");
 		
 		// Definition of strategies to call the API(s)
 		
@@ -215,10 +217,11 @@ public class Main {
 		dbw.evaluateSPARQLSon(selected_query, strategy, params);
 		long elapsedTime = System.nanoTime() - start;
 		
-		System.out.println("API Calls: " + dbw.ApiCalls);
+		System.out.println("Mappings: " + dbw.mappingCount);
+		System.out.println("API Calls: " + dbw.apiOptimizer.apiCalls);
 		System.out.println("Total: " + elapsedTime / 1000000000.0);
-		System.out.println("API: " + dbw.timeApi / 1000000000.0);
-		elapsedTime = elapsedTime - dbw.timeApi;	
+		System.out.println("API: " + dbw.apiOptimizer.timeApi / 1000000000.0);
+		elapsedTime = elapsedTime - dbw.apiOptimizer.timeApi;
 		System.out.println("DB: " + elapsedTime / 1000000000.0);
 		
 		/* strategy_oauth.set_params(params2);

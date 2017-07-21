@@ -17,6 +17,7 @@ import org.apache.jena.query.QueryFactory;
 import org.apache.jena.query.QuerySolution;
 import org.apache.jena.query.ReadWrite;
 import org.apache.jena.query.ResultSet;
+import org.apache.jena.query.ResultSetFactory;
 import org.apache.jena.rdf.model.Model;
 import org.apache.jena.tdb.TDBFactory;
 import org.apache.jena.util.FileManager;
@@ -28,26 +29,39 @@ import com.jayway.jsonpath.JsonPath;
 
 
 public class DatabaseWrapper {
+	/*
+	 * PROPERTIES
+	 */
 	
-	int ApiCalls;
+	ApiOptimizer apiOptimizer;
+	int mappingCount;
 	String TDBdirectory;
-	long timeApi;
-	ArrayList<String> cacheKeys;
-	HashMap<String, Object> cache; //MM changed JSONObject to Object because of use of jsonpath
-	static final int CACHE_SIZE = 400;
+	static final int RESULTS_MAX = 100000;
 	static final boolean FUSEKI_ENABLED = false;
 	static final boolean LOG = true;
-	
+
 	static final Class[] no_quote_types = {Boolean.class, Integer.class, Double.class, Float.class};
 
+	/*
+	 * CONSTRUCTORS
+	 */
+	
 	public DatabaseWrapper(String _directory) {
 		this.TDBdirectory = _directory;
-		this.cacheKeys = new ArrayList<String>();
-		this.cache = new HashMap<>();
-		this.timeApi = 0;
-		this.ApiCalls = 0;
+		this.apiOptimizer = new ApiOptimizer();
+		this.mappingCount = 0;
 	}
+	
+	/*
+	 * METHODS
+	 */
 
+	/*
+	 * FUNCTION: Create the dataset to query on from the source file
+	 * @param {String} source
+	 * @param {String} format
+	 * @return {}
+	 */
 	public void createDataset(String source, String format) {
 		Dataset dataset = TDBFactory.createDataset(this.TDBdirectory);
 		Model tdb = dataset.getDefaultModel();
@@ -55,6 +69,78 @@ public class DatabaseWrapper {
 		dataset.close();
 	}
 	
+	/*
+	 * FUNCTION: Evaluate if the query includes an API service section, execute the query according to the adequate method
+	 * @param {String} queryString
+	 * @param {ArrayList<GetJSONStrategy>} strategy
+	 * @param {ArrayList<HashMap<String, String>>} params
+	 * @param {boolean} replace (optional)
+	 * @return {}
+	 */
+	public void evaluateSPARQLSon(String queryString, ArrayList<GetJSONStrategy> strategy, ArrayList<HashMap<String, String>> params) throws JSONException, Exception {
+		evaluateSPARQLSon(queryString, strategy, params, true);
+	}
+	
+	public void evaluateSPARQLSon(String queryString, ArrayList<GetJSONStrategy> strategy, ArrayList<HashMap<String, String>> params, boolean replace) throws JSONException, Exception {
+		strategy.get(0).set_params(params.get(0));
+		HashMap<String, Object> parsedQuery = SPARQLSonParser.parseSPARQLSonQuery(queryString, replace);
+		int limit = retrieve_limit((String) parsedQuery.get("OPTIONS"), params.get(0));
+		
+		if (parsedQuery.get("URL") == null) {
+			// Applies the sparql execution method
+			execQuery(queryString);
+		}
+		else {
+			// Applies the pipeline execution method for query including API service
+			if(params.get(0).containsKey("pipeline") && params.get(0).get("pipeline").equals("true")) {
+				MappingSet ms = execQueryPipeURL(parsedQuery, strategy, params, limit);
+				execPostBindQuery((String) parsedQuery.get("PREFIX") + " " + (String) parsedQuery.get("SELECT"),
+								  "}" + (String) parsedQuery.get("OPTIONS"), 
+								  ms);
+			}
+			// Applies the generic execution method for query including API service
+			else {
+				MappingSet ms = execQueryGenURL(parsedQuery, strategy.get(0), params.get(0), limit);
+				// Recursive condition is that the LAST section of parsedQuery includes another API service section
+				String api_url_string = " +SERVICE +<([\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+)> *\\{ *\\( *(\\$.*$)";	
+				Pattern pattern_variables = Pattern.compile(api_url_string);
+				Matcher m = pattern_variables.matcher(" " + (String) parsedQuery.get("LAST"));
+				if (m.find()) {
+					String recursive_query_string = ((String) parsedQuery.get("PREFIX")) + ((String) parsedQuery.get("SELECT")) + ms.serializeAsValues() + (String) parsedQuery.get("LAST");
+					evaluateSPARQLSon(recursive_query_string, new ArrayList<GetJSONStrategy>(strategy.subList(1, strategy.size())), new ArrayList<HashMap<String,String>>(params.subList(1, params.size())), false);
+				}
+				else {
+					execPostBindQuery((String) parsedQuery.get("PREFIX") + (String) parsedQuery.get("SELECT"), (String) parsedQuery.get("LAST"), ms);
+				}
+
+			}
+		}
+	}
+	
+	/*
+	 * FUNCTION: Get the results' limit from the query or applies the static constant of the dbw
+	 * @param {String} options
+	 * @param {ArrayList<HashMap<String, String>>} params
+	 * @return {int}
+	 */
+	public int retrieve_limit(String options, HashMap<String, String> params) {
+		String limit_regex = "LIMIT *(\\d+)";
+		Pattern pattern_limit = Pattern.compile(limit_regex);
+		Matcher m_limit = pattern_limit.matcher(options);
+		int limit = RESULTS_MAX;
+		if (m_limit.find()) {
+			params.put("pipeline", "true");
+			limit = Integer.parseInt(m_limit.group(1));
+		}
+		return limit;
+	}
+	
+	/*
+	 * FUNCTION: Execute a simple sparql query and print it in a JSON format
+	 * @param {String} source
+	 * @param {String} format
+	 * @return {}
+	 */
 	public void execQuery(String queryString) {
 		Query query = QueryFactory.create(queryString);
 		QueryExecution qexec;
@@ -73,7 +159,6 @@ public class DatabaseWrapper {
 			jsonResponse.put("results", new JSONArray());
 			jsonResponse.put("vars", rs.getResultVars());
 			// The order of results is undefined. 
-			int mapping_count = 0;
 			for ( ; rs.hasNext() ; ) {
 				JSONObject mappingToJSON = new JSONObject();
 				QuerySolution rb = rs.nextSolution() ;
@@ -82,10 +167,9 @@ public class DatabaseWrapper {
 					mappingToJSON.put(v, rb.get(v));
 				}
 				((JSONArray)jsonResponse.get("results")).put(mappingToJSON);
-				mapping_count++;
+				this.mappingCount++;
 			}
 			System.out.println(jsonResponse.toString());
-			System.out.println("Mappings: "+mapping_count);
 		}
 		finally
 		{
@@ -97,39 +181,22 @@ public class DatabaseWrapper {
 		}
 	}
 
-	public void execQuery(String queryString, String[] variables) {
-		Query query = QueryFactory.create(queryString);
-		Dataset dataset = TDBFactory.createDataset(this.TDBdirectory);
-		QueryExecution qexec = QueryExecutionFactory.create(query, dataset);
-		try {
-			// Assumption: it's a SELECT query.
-			ResultSet rs = qexec.execSelect();
-			// The order of results is undefined. 
-			int mapping_number = 1;
-			for ( ; rs.hasNext() ; ) {
-				QuerySolution rb = rs.nextSolution() ;
-				System.out.println("### Mapping no. " + mapping_number + " ###");
-				// Get title - variable names do not include the '?' (or '$')
-				for (String v: variables) {	
-					System.out.println("Variable: " + v + ", Value: " + rb.get(v));
-				}
-				System.out.println("######");
-				mapping_number++;
-			}
-		}
-		finally
-		{
-			// QueryExecution objects should be closed to free any system resources 
-			qexec.close() ;
-			dataset.close();
-		}
-	}
-
-	public MappingSet execQueryGenURL(String queryString, String apiUrlRequest, String[] jpath, 
-			String[] bindName, GetJSONStrategy strategy, 
-			HashMap<String, String> params) throws JSONException, Exception {
-		System.out.println(queryString);
-		Query query = QueryFactory.create(queryString);
+	/*
+	 * FUNCTION: Map the JSON values from the API call with all the values from the previous sparql query
+	 * @param {HashMap<String, Object>} parsedQuery
+	 * @param {GetJSONStrategy} strategy
+	 * @param {HashMap<String, String>} params
+	 * @param {int} limit
+	 * @return {MappingSet}
+	 */
+	public MappingSet execQueryGenURL(HashMap<String, Object> parsedQuery, 
+			GetJSONStrategy strategy, HashMap<String, String> params, int limit) 
+					throws JSONException, Exception {
+		String firstQuery = retrieve_firstQuery (parsedQuery, params, limit);
+		System.out.println(firstQuery);
+		String[] bindName = (String[])parsedQuery.get("ALIAS");
+		String[] jpath = (String[])parsedQuery.get("PATH");
+		Query query = QueryFactory.create(firstQuery);
 		QueryExecution qexec;
 		Dataset dataset;
 		if(!FUSEKI_ENABLED) {
@@ -140,7 +207,6 @@ public class DatabaseWrapper {
 			qexec = QueryExecutionFactory.sparqlService("http://localhost:3030/ds", query);
 		}
 		MappingSet ms = new MappingSet();
-		int numb_mappings=0;
 		ArrayList<String> ms_varnames = new ArrayList<String>();
 
 		try {
@@ -158,13 +224,13 @@ public class DatabaseWrapper {
 			for ( ; rs.hasNext() ; ) {
 				QuerySolution rb = rs.nextSolution() ;	
 				HashMap<String, String> mapping = mappQuerySolution(rb, vars_name);				
-				String url_req = ApiWrapper.insertValuesURL(apiUrlRequest, rb, params.get("replace_string"));
+				String url_req = ApiWrapper.insertValuesURL((String)parsedQuery.get("URL"), rb, params.get("replace_string"));
 				Object json = null;
 				try {
 					long start = System.nanoTime();
-					json = retrieve_json(url_req, params, strategy);
+					json = this.apiOptimizer.retrieve_json(url_req, params, strategy);
 					long stop = System.nanoTime();
-					this.timeApi += (stop - start);
+					this.apiOptimizer.timeApi += (stop - start);
 				}
 				catch (Exception name) {
 					System.out.println("ERROR: " + name);
@@ -197,7 +263,6 @@ public class DatabaseWrapper {
 					// Add all the mappings relative to the result rb to the MappingSet to return
 					for (int k=0; k<mapping_array.size(); k++){
 						ms.addMapping(mapping_array.get(k));
-						numb_mappings += +1;
 					}
 				}
 			}
@@ -210,9 +275,157 @@ public class DatabaseWrapper {
 				dataset.close();
 			}
 		}
+		return ms;	
+	}
+	
+	/*
+	 * FUNCTION: One mapping after the other, map the JSON data from the API with the RDF data from the complete sparql query
+	 * @param {HashMap<String, Object>} parsedQuery
+	 * @param {ArrayList<GetJSONStrategy>} strategy
+	 * @param {ArrayList<HashMap<String, String>>} params
+	 * @param {int} limit
+	 * @return {MappingSet}
+	 */
+	public MappingSet execQueryPipeURL(HashMap<String, Object> parsedQuery, 
+			ArrayList<GetJSONStrategy> strategy, ArrayList<HashMap<String, String>> params, int limit) 
+			throws JSONException, Exception {
+		String firstQuery = retrieve_firstQuery (parsedQuery, params.get(0), limit);
+		System.out.println(firstQuery);
+		String[] bindName = (String[])parsedQuery.get("ALIAS");
+		String[] jpath = (String[])parsedQuery.get("PATH");
+		Query query = QueryFactory.create(firstQuery);
+		QueryExecution qexec;
+		Dataset dataset;
+		if(!FUSEKI_ENABLED) {
+			dataset = TDBFactory.createDataset(this.TDBdirectory);
+			qexec = QueryExecutionFactory.create(query, dataset);
+		}
+		else {
+			qexec = QueryExecutionFactory.sparqlService("http://localhost:3030/ds", query);
+		}
+		MappingSet ms = new MappingSet();
+		ArrayList<String> ms_varnames = new ArrayList<String>();
+		try {
+			// Assumption: it's a SELECT query.
+			ResultSet rs = qexec.execSelect() ;
+			// Materialize the results to be able to free the system resources for the next query executions
+		    rs = ResultSetFactory.copyResults(rs) ;
+			// QueryExecution objects should be closed to free any system resources 
+		    qexec.close();
+		    
+			List<String> vars_name =  rs.getResultVars();
+			for (String vn: vars_name) {
+				ms_varnames.add(vn);
+			}
+			for (String bn: bindName) {
+				ms_varnames.add(bn);
+			}
+			// The order of results is undefined.
+			while (rs.hasNext() && this.mappingCount < limit) {
+				MappingSet ms_temp = new MappingSet();
+				ms_temp.set_var_names(ms_varnames);
+				
+				QuerySolution rb = rs.nextSolution() ;	
+				HashMap<String, String> mapping = mappQuerySolution(rb, vars_name);
+				String url_req = ApiWrapper.insertValuesURL((String)parsedQuery.get("URL"), rb, params.get(0).get("replace_string"));
+				Object json = null;
+				try {
+					long start = System.nanoTime();
+					json = this.apiOptimizer.retrieve_json(url_req, params.get(0), strategy.get(0));
+					long stop = System.nanoTime();
+					this.apiOptimizer.timeApi += (stop - start);
+				}
+				catch (Exception name) {
+					System.out.println("ERROR: " + name);
+					for (int i = 0; i < bindName.length; i++) {
+						mapping.put(bindName[i], "UNDEF");
+					}
+				}
+				if (json != null) {
+					ArrayList<HashMap<String, String>> mapping_array = new ArrayList<HashMap<String, String>>();
+					for (int i = 0; i < bindName.length; i++) {
+						try {				
+							Object value = JsonPath.parse(json).read(jpath[i]);
+							mapping_array = updateMappingArray(mapping_array, value, bindName[i], i, mapping);					
+						}
+						catch (Exception name) {
+							System.out.println("ERROR: " + name);
+							// CASE 0.A: json_nav = first argument
+							if(i==0){
+								mapping.put(bindName[i], "UNDEF");
+								mapping_array.add(mapping); // the ArrayList has a size=1				
+							}
+							// CASE 0.B: json_nav = next arguments
+							else {
+								for (int k=0; k<mapping_array.size(); k++){
+									mapping_array.get(k).put(bindName[i], "UNDEF");
+								}
+							}
+						}
+					}
+					// Add all the mappings relative to the result rb to the MappingSet to return
+					for (int k=0; k<mapping_array.size(); k++){
+						ms_temp.addMapping(mapping_array.get(k));
+					}
+				}
+				// Recursive condition is that the LAST section of parsedQuery includes another API service section
+				String api_url_string = " +SERVICE +<([\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+)> *\\{ *\\( *(\\$.*$)";	
+				Pattern pattern_variables = Pattern.compile(api_url_string);
+				Matcher m = pattern_variables.matcher(" " + (String) parsedQuery.get("LAST"));
+				String recursive_query_string = ((String) parsedQuery.get("PREFIX")) + ((String) parsedQuery.get("SELECT")) + ms_temp.serializeAsValues() + (String) parsedQuery.get("LAST") + (String) parsedQuery.get("OPTIONS");
+				if (m.find()) {
+					strategy.get(1).set_params(params.get(1));
+					ms_temp = execQueryPipeURL(SPARQLSonParser.parseSPARQLSonQuery(recursive_query_string, false), 
+							new ArrayList<GetJSONStrategy>(strategy.subList(1, strategy.size())),
+							new ArrayList<HashMap<String,String>>(params.subList(1, params.size())),
+							limit);
+				}
+				else {
+					ms_temp = mappPostBindQuery(recursive_query_string, limit);
+				}
+				ms.set_var_names(ms_temp.var_names);
+				for (int k=0; k<ms_temp.mappings.size(); k++){
+					ms.addMapping(ms_temp.mappings.get(k));
+				}
+			}
+		}
+		finally
+		{
+			if(!FUSEKI_ENABLED) {
+				dataset.close();
+			}
+		}
 		return ms;
 	}
 	
+	/*
+	 * FUNCTION: Get the first query to execute before mapping the JSON values
+	 * @param {HashMap<String, Object>} parsedQuery
+	 * @param {HashMap<String, String>} params
+	 * @param {int} limit
+	 * @return {String}
+	 */
+	public String retrieve_firstQuery (HashMap<String, Object> parsedQuery, HashMap<String, String> params, int limit) {
+		String firstQuery = (String) parsedQuery.get("PREFIX") + " SELECT * WHERE { " + (String) parsedQuery.get("FIRST") + " } ";
+		// Optimize the parsed query to call the API a minimum amount of times
+		if(params.containsKey("min_api_call") && params.get("min_api_call").equals("true")) {
+			parsedQuery = this.apiOptimizer.minimizeAPICall(parsedQuery);
+			if (parsedQuery.get("VARS").toString().length()>0) {
+				firstQuery = (String) parsedQuery.get("PREFIX") + " SELECT DISTINCT " + parsedQuery.get("VARS") + " WHERE {" + (String) parsedQuery.get("FIRST") + "} LIMIT " + limit;
+			}
+			else {
+				firstQuery = (String) parsedQuery.get("PREFIX") + " SELECT * " + " WHERE {" + (String) parsedQuery.get("FIRST") + "} LIMIT " + limit;
+			}
+		}
+		return firstQuery;
+	}
+	
+	/*
+	 * FUNCTION: Transform a sparql QuerySolution into a mapping
+	 * @param {QuerySolution} rb
+	 * @param {List<String>} vars_name
+	 * @return {HashMap<String, String>}
+	 */
 	public HashMap<String, String> mappQuerySolution(QuerySolution rb, List<String> vars_name) {
 		HashMap<String, String> mapping = new HashMap<String, String>();
 		for(String var: vars_name) {
@@ -245,6 +458,29 @@ public class DatabaseWrapper {
 		return mapping;
 	}
 	
+	/*
+	 * FUNCTION: Serialize a JSONObject value
+	 * @param {Object} value
+	 * @return {String}
+	 */
+	public static String serializeValue(Object value) {
+		for (Class c: no_quote_types) {
+			if (value.getClass().equals(c)) {
+				return value.toString();
+			}
+		}
+		return "\"" + value.toString().replace('\n', ' ').replace("\"", "\\\"") + "\"";
+	}
+	
+	/*
+	 * FUNCTION: Update a mapping_array by mapping a new jsonValue
+	 * @param {ArrayList<HashMap<String, String>>} mapping_array
+	 * @param {Object} jsonValue
+	 * @param {String} bindName
+	 * @param {int} bindName_index
+	 * @param {HashMap<String, String>} initial_mapping
+	 * @return {ArrayList<HashMap<String, String>>}
+	 */
 	public ArrayList<HashMap<String, String>> updateMappingArray(ArrayList<HashMap<String, String>> mapping_array, Object jsonValue, String bindName, int bindName_index, HashMap<String, String> initial_mapping) {
 		int mapping_array_size = mapping_array.size();
 		// CASE 1: value.class = Array of Elements
@@ -272,7 +508,6 @@ public class DatabaseWrapper {
 							mapping_array.get(mapping_array.size()-1).put(bindName, serializeValue(((net.minidev.json.JSONArray)jsonValue).get(j)));
 						}
 					}
-					
 				}
 			}	
 		}
@@ -293,20 +528,66 @@ public class DatabaseWrapper {
 		return mapping_array;
 	}
 	
-	public static String serializeValue(Object value) {
-		for (Class c: no_quote_types) {
-			if (value.getClass().equals(c)) {
-				return value.toString();
+	/*
+	 * FUNCTION: Transform a sparql queryString into a MappingSet
+	 * @param {String} queryString
+	 * @param {int} limit
+	 * @return {MappingSet}
+	 */
+	public MappingSet mappPostBindQuery(String queryString, int limit) {
+		System.out.println(queryString);
+		Query query = QueryFactory.create(queryString);
+		QueryExecution qexec;
+		Dataset dataset;
+		if(!FUSEKI_ENABLED) {
+			dataset = TDBFactory.createDataset(this.TDBdirectory);
+			qexec = QueryExecutionFactory.create(query, dataset);
+		}
+		else {
+			qexec = QueryExecutionFactory.sparqlService("http://localhost:3030/ds", query);
+		}
+		MappingSet ms = new MappingSet();
+		ArrayList<String> ms_varnames = new ArrayList<String>();
+		try {
+			// Assumption: it's a SELECT query.
+			ResultSet rs = qexec.execSelect() ;
+		    rs = ResultSetFactory.copyResults(rs) ;
+			// QueryExecution objects should be closed to free any system resources 
+		    qexec.close();
+		    
+			List<String> vars_name =  rs.getResultVars();
+			for (String vn: vars_name) {
+				ms_varnames.add(vn);
+			}
+			ms.set_var_names(ms_varnames);
+			// The order of results is undefined.
+			while (rs.hasNext() && this.mappingCount < limit ) {				
+				QuerySolution rb = rs.nextSolution() ;	
+				System.out.println("--DEBUG-- "+rb);
+				HashMap<String, String> mapping = mappQuerySolution(rb, vars_name);
+				ms.addMapping(mapping);
+				this.mappingCount += 1;
 			}
 		}
-		return "\"" + value.toString().replace('\n', ' ').replace("\"", "\\\"") + "\"";
+		finally
+		{
+			if(!FUSEKI_ENABLED) {
+				dataset.close();
+			}
+		}
+		return ms;
 	}
 	
-
+	/*
+	 * FUNCTION: Execute a sparql query serializing a MappingSet
+	 * @param {String} selectSection
+	 * @param {String} bodySection
+	 * @param {MappingSet} ms
+	 * @return {ResultSet}
+	 */
 	public ResultSet execPostBindQuery(String selectSection, String bodySection, MappingSet ms) {
 		ResultSet rs = null;
 		String queryString = selectSection + ms.serializeAsValues() + bodySection;
-// 		System.out.println("--DEBUG EXECPOSTBINDQUERY-- Querystring: "+ queryString);
 		QueryExecution qexec;
 		Dataset dataset;
 		if(!FUSEKI_ENABLED) {
@@ -333,13 +614,17 @@ public class DatabaseWrapper {
 		}
 		return rs;
 	}
-
-	public static void printResultSet(ResultSet rs) {
-		int mapping_count = 0;
+	
+	/*
+	 * FUNCTION: Print the results in a JSON format
+	 * @param {ResultSet} rs
+	 * @return {}
+	 */
+	public void printResultSet(ResultSet rs) {
 		JSONObject jsonResponse = new JSONObject();
 		jsonResponse.put("results", new JSONArray());
 		jsonResponse.put("vars", rs.getResultVars());
-		
+		this.mappingCount = 0;
 		for ( ; rs.hasNext() ; ) {
 			JSONObject mappingToJson = new JSONObject();
 			QuerySolution rb = rs.nextSolution() ;
@@ -350,89 +635,9 @@ public class DatabaseWrapper {
 				mappingToJson.put(v, rb.get(v));
 			}
 			((JSONArray)jsonResponse.getJSONArray("results")).put(mappingToJson);
-			mapping_count++;
+			this.mappingCount++;
 		}
 		System.out.println(jsonResponse.toString());
-		System.out.println("Mappings: " + mapping_count);
 	}
-
-	public void evaluateSPARQLSon(String queryString, ArrayList<GetJSONStrategy> strategy, ArrayList<HashMap<String, String>> params, boolean replace) throws JSONException, Exception {
-		strategy.get(0).set_params(params.get(0));
-		HashMap<String, Object> parsedQuery = SPARQLSonParser.parseSPARQLSonQuery(queryString, replace);
-		if (parsedQuery.get("URL")!= null && parsedQuery.get("PATH") != null && parsedQuery.get("ALIAS") != null ) {
-			String firstQuery = apply_params_to_first_query(params, parsedQuery);
-			if(params.get(0).containsKey("min_api_call") && params.get(0).get("min_api_call").equals("true")) {
-				parsedQuery = ApiOptimizer.minimizeAPICall(parsedQuery);
-				if (parsedQuery.get("VARS").toString().length()>0) {
-					firstQuery = (String) parsedQuery.get("PREFIX") + " SELECT DISTINCT " + parsedQuery.get("VARS") + " WHERE {" + (String) parsedQuery.get("FIRST") + "} ";;
-				}
-				else {
-					firstQuery = (String) parsedQuery.get("PREFIX") + " SELECT * " + " WHERE {" + (String) parsedQuery.get("FIRST") + "} ";;
-				}
-			}
-			MappingSet ms = execQueryGenURL(firstQuery,
-					(String) parsedQuery.get("URL"),
-					(String[]) parsedQuery.get("PATH"),
-					(String[]) parsedQuery.get("ALIAS"),
-					strategy.get(0), params.get(0));
-			String api_url_string = " +SERVICE +<([\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+)> *\\{ *\\( *(\\$.*$)";	
-			Pattern pattern_variables = Pattern.compile(api_url_string);
-			Matcher m = pattern_variables.matcher(" " + (String) parsedQuery.get("LAST"));
-			if (m.find()) {
-				String recursive_query_string = ((String) parsedQuery.get("PREFIX")) + ((String) parsedQuery.get("SELECT")) + ms.serializeAsValues() + (String) parsedQuery.get("LAST");
-				evaluateSPARQLSon(recursive_query_string, new ArrayList<GetJSONStrategy>(strategy.subList(1, strategy.size())), new ArrayList<HashMap<String,String>>(params.subList(1, params.size())), false);
-			}
-			else {
-				execPostBindQuery((String) parsedQuery.get("PREFIX") + " " + (String) parsedQuery.get("SELECT"), (String) parsedQuery.get("LAST"), ms);
-			}
-		}
-		else {
-			execQuery(queryString);
-		}
-	}
-
-	public void evaluateSPARQLSon(String queryString, ArrayList<GetJSONStrategy> strategy, ArrayList<HashMap<String, String>> params) throws JSONException, Exception {
-		evaluateSPARQLSon(queryString, strategy, params, true);
-	}
-
-	public String apply_params_to_first_query(ArrayList<HashMap<String, String>> params, HashMap<String, Object> parsedQuery) throws JSONException, Exception {
-		String new_query = "";
-		if (params.get(0).containsKey("distinct") && params.get(0).get("distinct").equals("true")) {
-			new_query = (String) parsedQuery.get("PREFIX") + " SELECT DISTINCT " + params.get(0).get("distinct_var") + " WHERE { " + (String) parsedQuery.get("FIRST") + " } ";
-		}
-		else {
-			new_query = (String) parsedQuery.get("PREFIX") + " SELECT * WHERE { " + (String) parsedQuery.get("FIRST") + " } ";
-		}
-		if (params.get(0).containsKey("limit")) {
-			new_query += "LIMIT " + params.get(0).get("limit") + " ";
-		}
-		return new_query;
-	}
-	
-	public Object retrieve_json(String url_req, HashMap<String,String> params, GetJSONStrategy strategy) throws JSONException, Exception {
-		if (params.containsKey("cache") && params.get("cache").equals("true")) {
-			if (cache.containsKey(url_req)) {
-				return cache.get(url_req);
-			}
-			else {
-				this.ApiCalls += 1;
-				Object json =  ApiWrapper.getJSON(url_req, params, strategy);
-				if (cacheKeys.size() < CACHE_SIZE) {
-					cacheKeys.add(url_req);
-					cache.put(url_req, json);
-				}
-				else {
-					String removed_key = cacheKeys.remove(0);
-					cache.remove(removed_key);
-					cache.put(url_req, json);
-				}
-				return json;
-			}
-		}
-		else {
-			this.ApiCalls += 1;
-			return ApiWrapper.getJSON(url_req, params, strategy);
-		}
-	}
-	
+		
 }
