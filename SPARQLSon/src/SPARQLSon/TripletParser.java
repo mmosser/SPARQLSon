@@ -42,9 +42,20 @@ public class TripletParser {
 			this.service_uri = null;
 		}
 		this.triplets = new ArrayList<String[]>();
-		String triplet_regex = "(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) (<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) (<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) *\\.*(.*$)";
+		// Match ?a ?b ?c ; ?d ?e . and transform into ?a ?b ?c . ?a ?d ?e .
+		String triplet_regex = "((<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+)) *;(.*$)";
 		Pattern pattern_triplet = Pattern.compile(triplet_regex);
 		Matcher matcherTriplet = pattern_triplet.matcher(queryPart);
+		while(matcherTriplet.find()) {
+			queryPart = matcherTriplet.group(1) + " . " + matcherTriplet.group(2) + " " + matcherTriplet.group(5).trim();
+			System.out.println(queryPart);
+
+			matcherTriplet = pattern_triplet.matcher(queryPart);
+		}
+		// Match the triplets add them to the TripletParser
+		triplet_regex = "(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) *\\.*(.*$)";
+		pattern_triplet = Pattern.compile(triplet_regex);
+		matcherTriplet = pattern_triplet.matcher(queryPart);
 		while(matcherTriplet.find()) {
 			String[] triplets = new String[]{matcherTriplet.group(1), matcherTriplet.group(2), matcherTriplet.group(3)};
 			this.triplets.add(triplets);
@@ -58,9 +69,19 @@ public class TripletParser {
 		this.section_type = "basic";
 		this.service_uri = null;
 		this.triplets = new ArrayList<String[]>();
-		String triplet_regex = "(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) (<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) (<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) *\\.*(.*$)";
+		// Match ?a ?b ?c ; ?d ?e . and transform into ?a ?b ?c . ?a ?d ?e .
+		String triplet_regex = "((<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+)) *;(.*$)";
 		Pattern pattern_triplet = Pattern.compile(triplet_regex);
 		Matcher matcherTriplet = pattern_triplet.matcher(queryPart);
+		while(matcherTriplet.find()) {
+			queryPart = matcherTriplet.group(1) + " . " + matcherTriplet.group(2) + " " + matcherTriplet.group(5).trim();
+			System.out.println(queryPart);
+			matcherTriplet = pattern_triplet.matcher(queryPart);
+		}
+		// Match the triplets add them to the TripletParser
+		triplet_regex = "(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) *\\.*(.*$)";
+		pattern_triplet = Pattern.compile(triplet_regex);
+		matcherTriplet = pattern_triplet.matcher(queryPart);
 		while(matcherTriplet.find()) {
 			String[] triplets = new String[]{matcherTriplet.group(1), matcherTriplet.group(2), matcherTriplet.group(3)};
 			this.triplets.add(triplets);
@@ -92,7 +113,7 @@ public class TripletParser {
 		ArrayList<TripletParser> parsedFirstQuery = new ArrayList<TripletParser>();
 		String api_url_string = "(.*) *SERVICE +<([\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+)> *\\{([^\\}]*)\\} *(.*$)";
 		Pattern pattern_variables = Pattern.compile(api_url_string);
-		String triplet_regex = "(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) (<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) (<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) *\\.*(.*$)";
+		String triplet_regex = "(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) *\\.*(.*$)";
 		Pattern pattern_triplet = Pattern.compile(triplet_regex);
 		String query_string = sparqlQuerySection;
 		Matcher m = pattern_variables.matcher(query_string);
@@ -175,11 +196,11 @@ public class TripletParser {
 				+ "    ?place ?yipo ?label ."
 				+ "	   <http://dbpedia.org/resource/Chile> <http://dbpedia.org/resource/Chile> <http://dbpedia.org/resource/Chile>"
     			+ "  }"
-				+ "  ?place geo:lat ?lat ."
-				+ "  ?place geo:long ?long ."
+				+ "  ?place geo:lat ?lat ;"
+				+ "  	 geo:long ?long ."
 				+ "  SERVICE <http://dbpedia.org/sparql> {"
-				+ "    ?place rdfs:label ?label ."
-				+ "    plouf:opk ?rdfs:label ?label ."
+				+ "    ?place rdfs:label ?label ;"
+				+ "    		 ?rdfs:label ?label ."
 				+ "	   FILTER(lang(?label) = 'es') ."
 				+ "	   pojfiunfo;lkco,cin;^zù"
 				+ "}";
