@@ -222,7 +222,7 @@ public class DatabaseWrapper {
 			ms.set_var_names(ms_varnames);
 			// The order of results is undefined. 
 			for ( ; rs.hasNext() ; ) {
-				QuerySolution rb = rs.nextSolution() ;	
+				QuerySolution rb = rs.nextSolution() ;
 				HashMap<String, String> mapping = mappQuerySolution(rb, vars_name);				
 				String url_req = ApiWrapper.insertValuesURL((String)parsedQuery.get("URL"), rb, params.get("replace_string"));
 				Object json = null;

@@ -155,11 +155,11 @@ public class Main {
 				+ "SELECT DISTINCT ?place ?label ?lat ?long ?latCountry ?longCountry ?v WHERE  {"
 				+ "  SERVICE <http://dbpedia.org/sparql> {"
 				+ "    ?place <http://dbpedia.org/ontology/country> <http://dbpedia.org/resource/Chile> ."
-				+ "    <http://dbpedia.org/resource/Chile> geo:lat ?latCountry ."
-				+ "    <http://dbpedia.org/resource/Chile> geo:long ?longCountry ."
+				+ "    <http://dbpedia.org/resource/Chile> geo:lat ?latCountry ;"
+				+ "    										geo:long ?longCountry ."
 				+ "  } ."
-				+ "  ?place geo:lat ?lat ."
-				+ "  ?place geo:long ?long ."
+				+ "  ?place geo:lat ?lat ;"
+				+ "         geo:long ?long ."
 				+ "  SERVICE <http://dbpedia.org/sparql> {"
 				+ "    ?place rdfs:label ?label ."
 				+ "    FILTER(lang(?label) = 'es') ."
@@ -189,8 +189,8 @@ public class Main {
 		params1.put("replace_string", "_");
 		params1.put("cache", "false");
 		
-//		params1.put("min_api_call", "true");
-		params1.put("pipeline", "true");
+		params1.put("min_api_call", "true");
+//		params1.put("pipeline", "true");
 		
 		// Definition of strategies to call the API(s)
 		
@@ -210,7 +210,7 @@ public class Main {
 		
 		
 		// Execution of the query
-		String selected_query = test_service_api_sparql_api;
+		String selected_query = min_API_call_test;
 		
 //		System.out.println("QUERYING: \n" + selected_query);
 		long start = System.nanoTime();

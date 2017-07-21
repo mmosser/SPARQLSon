@@ -48,8 +48,6 @@ public class TripletParser {
 		Matcher matcherTriplet = pattern_triplet.matcher(queryPart);
 		while(matcherTriplet.find()) {
 			queryPart = matcherTriplet.group(1) + " . " + matcherTriplet.group(2) + " " + matcherTriplet.group(5).trim();
-			System.out.println(queryPart);
-
 			matcherTriplet = pattern_triplet.matcher(queryPart);
 		}
 		// Match the triplets add them to the TripletParser
@@ -75,7 +73,6 @@ public class TripletParser {
 		Matcher matcherTriplet = pattern_triplet.matcher(queryPart);
 		while(matcherTriplet.find()) {
 			queryPart = matcherTriplet.group(1) + " . " + matcherTriplet.group(2) + " " + matcherTriplet.group(5).trim();
-			System.out.println(queryPart);
 			matcherTriplet = pattern_triplet.matcher(queryPart);
 		}
 		// Match the triplets add them to the TripletParser
@@ -110,15 +107,24 @@ public class TripletParser {
 	 * @return {ArrayList<TripletParser>}
 	 */
 	public static ArrayList<TripletParser> getParsedQuery(String sparqlQuerySection) {
+		// Match ?a ?b ?c ; ?d ?e . and transform into ?a ?b ?c . ?a ?d ?e .
+		String triplet_regex = "(.*)((<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+)) *;(.*$)";
+		Pattern pattern_triplet = Pattern.compile(triplet_regex);
+		Matcher matcherTriplet = pattern_triplet.matcher(sparqlQuerySection);
+		while(matcherTriplet.find()) {
+			sparqlQuerySection = matcherTriplet.group(1) + matcherTriplet.group(2) + " . " + matcherTriplet.group(3) + " " + matcherTriplet.group(6).trim();
+			matcherTriplet = pattern_triplet.matcher(sparqlQuerySection);
+		}
+		
 		ArrayList<TripletParser> parsedFirstQuery = new ArrayList<TripletParser>();
 		String api_url_string = "(.*) *SERVICE +<([\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+)> *\\{([^\\}]*)\\} *(.*$)";
 		Pattern pattern_variables = Pattern.compile(api_url_string);
-		String triplet_regex = "(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) *\\.*(.*$)";
-		Pattern pattern_triplet = Pattern.compile(triplet_regex);
+		triplet_regex = "(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) *\\.*(.*$)";
+		pattern_triplet = Pattern.compile(triplet_regex);
 		String query_string = sparqlQuerySection;
 		Matcher m = pattern_variables.matcher(query_string);
 		while(m.find()) {
-			Matcher matcherTriplet = pattern_triplet.matcher(m.group(4));
+			matcherTriplet = pattern_triplet.matcher(m.group(4));
 			if(matcherTriplet.find()) {
 				TripletParser basic_section = new TripletParser(m.group(4));
 				parsedFirstQuery.add(0, basic_section);
@@ -129,7 +135,7 @@ public class TripletParser {
 			query_string = m.group(1);
 			m = pattern_variables.matcher(query_string);
 		}
-		Matcher matcherTriplet = pattern_triplet.matcher(query_string);
+		matcherTriplet = pattern_triplet.matcher(query_string);
 		if(matcherTriplet.find()) {
 			TripletParser basic_section = new TripletParser(query_string);
 			parsedFirstQuery.add(0, basic_section);
