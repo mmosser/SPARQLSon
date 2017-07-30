@@ -128,40 +128,5 @@ public class SPARQLSonParser {
 		}
 		return bindSections;
 	}
-	
-
-/*
- * OLD CODE
- */
-
-//		String post_bind_string = dividedQuery[1].trim();
-//		String navigation_string = "(\\))(?=((\\\\[\\\\\"]|[^\\\\\"])*\"(\\\\[\\\\\"]|[^\\\\\"])*\")*(\\\\[\\\\\"]|[^\\\\\"])*$)";
-//		pattern_variables = Pattern.compile(navigation_string);
-//		m = pattern_variables.matcher(post_bind_string);
-//		int loc = -1;
-//		if (m.find()) {
-//		    loc = m.start();
-//		}
-//		String json_nav_string = post_bind_string.substring(1, loc);
-//		String post_nav_string = post_bind_string.substring(loc + 1).trim().replaceAll("^AS ", "").trim();
-//		String[] json_navs = json_nav_string.split(",[\\s]*(?=((\\\\[\\\\\"]|[^\\\\\"])*\"(\\\\[\\\\\"]|[^\\\\\"])*\")*(\\\\[\\\\\"]|[^\\\\\"])*$)");
-//		System.out.println("PATH: "+ json_navs);
-//		m = pattern_variables.matcher(post_nav_string);
-//		loc = -1;
-//		if (m.find()) {
-//		    loc = m.start();
-//		}
-//		String aliases_string = post_nav_string.substring(1, loc);
-//		String[] aliases = aliases_string.split(",[\\s]*(?=((\\\\[\\\\\"]|[^\\\\\"])*\"(\\\\[\\\\\"]|[^\\\\\"])*\")*(\\\\[\\\\\"]|[^\\\\\"])*$)");
-//		for (int i = 0; i < aliases.length; i++) {
-//			aliases[i] = aliases[i].substring(1);
-//		}
-//		String post_aliases_string = post_nav_string.substring(loc + 1).trim();
-//		System.out.println("LAST: "+ post_aliases_string);
-//		bindSections.put("LAST", post_aliases_string);
-//		bindSections.put("ALIAS", aliases);
-//		bindSections.put("PATH", json_navs);
-//		return bindSections;
-//	}
-	
 }
+

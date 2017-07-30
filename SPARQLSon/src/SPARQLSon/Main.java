@@ -148,49 +148,80 @@ public class Main {
 				+ "    FILTER(lang(?label) = 'es') .\n"
     			+ "  }\n"
     			+ "  SERVICE <http://localhost:3000/q={label}>{($.object.value_1[*], $.object.value_2[0]) AS (?t1, ?t2)} \n"
-				+ "}"
-				+ "LIMIT 1000";
+				+ "}";
 		String min_API_call_test = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#>"
 				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>"
 				+ "SELECT DISTINCT ?place ?label ?lat ?long ?latCountry ?longCountry ?v WHERE  {"
-				+ "  SERVICE <http://dbpedia.org/sparql> {"
-				+ "    ?place <http://dbpedia.org/ontology/country> <http://dbpedia.org/resource/Chile> ."
-				+ "    <http://dbpedia.org/resource/Chile> geo:lat ?latCountry ;"
-				+ "    										geo:long ?longCountry ."
-				+ "  } ."
-				+ "  ?place geo:lat ?lat ;"
+				+ "  ?place <http://dbpedia.org/ontology/country> <http://dbpedia.org/resource/Chile> ;"
+				+ "         geo:lat ?lat ;"
 				+ "         geo:long ?long ."
 				+ "  SERVICE <http://dbpedia.org/sparql> {"
+				+ "    <http://dbpedia.org/resource/Chile> geo:lat ?latCountry ;"
+				+ "    									   geo:long ?longCountry ."
 				+ "    ?place rdfs:label ?label ."
 				+ "    FILTER(lang(?label) = 'es') ."
     			+ "  } ."
+    			+ "  SERVICE <http://localhost:3000/api>{($.version[*]) AS (?v)} ."
     			+ "  SERVICE <http://localhost:3000/q={label}>{($.object.version[*]) AS (?v)} ."
 				+ "}";
 		
-		// Definition of parameters
-		
-		HashMap<String, String> params1 = new HashMap<String, String>();
+		String test_use_case = "PREFIX geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> \n"
+				+ "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> \n"
+				+ "PREFIX xmlns: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> \n"
+				+ "PREFIX dbo: <http://dbpedia.org/ontology/> \n"
+				+ "PREFIX dbr: <http://dbpedia.org/resource/> \n"
+				+ "PREFIX yago: <http://dbpedia.org/class/yago/> \n"
 
-		// for openweathermap API call
+				+ "SELECT ?label ?retweet ?weather  WHERE  { \n"
+				+ "  ?place dbo:country dbr:Chile ;\n"
+				+ "  	xmlns:type yago:Capital108518505 .\n"
+				+ "  SERVICE <http://dbpedia.org/sparql> {\n"
+				+ "    ?place rdfs:label ?label .\n"
+				+ "    FILTER(lang(?label) = 'en') .\n"
+    			+ "  } .\n"
+				+ "  SERVICE <https://api.twitter.com/1.1/search/tweets.json?q={label}&result_type=recent>{"
+				+ "		($.statuses[*].retweet_count) AS (?retweet)"
+				+ "  } \n "
+				+ "  SERVICE <http://api.openweathermap.org/data/2.5/weather?q={label},Chile&appid=99ac6530dcbd78fa4c02d08ec5297a52>{"
+				+ "     ($.weather[*].description) AS (?weather)"
+				+ "  } \n"
+				+ " } ";
 		
-		/*		params1.put("consumerKey", "");
-				params1.put("consumerSecret", "");
-				params1.put("token", "");
-				params1.put("tokenSecret", "");
-				params1.put("replace_string", "_");
-				params1.put("cache", "false");		*/
-				
-		// for Twitter API "SPARQLSon" call
 		
+		// Definition of parameters
+		HashMap<String, String> params1 = new HashMap<String, String>();
+		HashMap<String, String> params2 = new HashMap<String, String>();
+		
+		/*
+		 *  Twitter app "SPARQLSon"
+		 */
+		// Authentication parameters
 		params1.put("consumerKey", "OGVqZOelXyt96ed2ZPNnpBUF6");
 		params1.put("consumerSecret", "VIdyxn4iF5fyAaAoq0YeApiAI0JALEcF1atLSUWInfBty4lZrW");
 		params1.put("token", "207609813-eGvMI0zesiiwZe0MFmwkvq54mOYDiExvkiUZxLET");
 		params1.put("tokenSecret", "wG8pwvorSTsmHqulgnQHi40nxfpnc7hWszJMvrwF8CNux");
+		// Optimization parameters
 		params1.put("replace_string", "_");
 		params1.put("cache", "false");
-		
 		params1.put("min_api_call", "true");
 //		params1.put("pipeline", "true");
+		
+		/*
+		 *  Openweather
+		 */
+		// Authentication parameters
+        params2.put("consumerKey", "");
+		params2.put("consumerSecret", "");
+		params2.put("token", "");
+		params2.put("tokenSecret", "");
+		params2.put("replace_string", "_");
+		params2.put("cache", "false");
+		// Optimization parameters
+		params2.put("replace_string", "_");
+		params2.put("cache", "false");
+		params2.put("min_api_call", "true");
+//		params2.put("pipeline", "true"); 
+
 		
 		// Definition of strategies to call the API(s)
 		
@@ -202,17 +233,19 @@ public class Main {
 		ArrayList<GetJSONStrategy> strategy = new ArrayList<>();
 		ArrayList<HashMap<String, String>> params = new ArrayList<HashMap<String,String>>();
 		
-	//	strategy.add(strategy_oauth);
+		strategy.add(strategy_oauth);
 		strategy.add(strategy_basic);
-		strategy.add(strategy_basic);
+//		strategy.add(strategy_basic);
+
 		params.add(params1);
-		params.add(params1);
+//		params.add(params1);
+		params.add(params2);
 		
 		
 		// Execution of the query
-		String selected_query = min_API_call_test;
+		String selected_query = test_use_case;
 		
-//		System.out.println("QUERYING: \n" + selected_query);
+		System.out.println("QUERYING: \n" + selected_query);
 		long start = System.nanoTime();
 		dbw.evaluateSPARQLSon(selected_query, strategy, params);
 		long elapsedTime = System.nanoTime() - start;

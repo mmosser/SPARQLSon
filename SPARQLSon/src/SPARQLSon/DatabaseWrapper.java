@@ -36,7 +36,7 @@ public class DatabaseWrapper {
 	ApiOptimizer apiOptimizer;
 	int mappingCount;
 	String TDBdirectory;
-	static final int RESULTS_MAX = 100000;
+	static final int RESULTS_MAX = 100000; // Maximum of results processed by the pipeline method if LIMIT operator is not used.
 	static final boolean FUSEKI_ENABLED = false;
 	static final boolean LOG = true;
 
@@ -84,33 +84,33 @@ public class DatabaseWrapper {
 	public void evaluateSPARQLSon(String queryString, ArrayList<GetJSONStrategy> strategy, ArrayList<HashMap<String, String>> params, boolean replace) throws JSONException, Exception {
 		strategy.get(0).set_params(params.get(0));
 		HashMap<String, Object> parsedQuery = SPARQLSonParser.parseSPARQLSonQuery(queryString, replace);
-		int limit = retrieve_limit((String) parsedQuery.get("OPTIONS"), params.get(0));
-		
 		if (parsedQuery.get("URL") == null) {
 			// Applies the sparql execution method
 			execQuery(queryString);
 		}
 		else {
+			int limit = retrieve_limit((String) parsedQuery.get("OPTIONS"), params.get(0));
 			// Applies the pipeline execution method for query including API service
 			if(params.get(0).containsKey("pipeline") && params.get(0).get("pipeline").equals("true")) {
 				MappingSet ms = execQueryPipeURL(parsedQuery, strategy, params, limit);
 				execPostBindQuery((String) parsedQuery.get("PREFIX") + " " + (String) parsedQuery.get("SELECT"),
-								  "}" + (String) parsedQuery.get("OPTIONS"), 
+								  "}" + (String) parsedQuery.get("OPTIONS"),
 								  ms);
 			}
 			// Applies the generic execution method for query including API service
 			else {
-				MappingSet ms = execQueryGenURL(parsedQuery, strategy.get(0), params.get(0), limit);
+				MappingSet ms = execQueryGenURL(parsedQuery, strategy.get(0), params.get(0));
 				// Recursive condition is that the LAST section of parsedQuery includes another API service section
 				String api_url_string = " +SERVICE +<([\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+)> *\\{ *\\( *(\\$.*$)";	
 				Pattern pattern_variables = Pattern.compile(api_url_string);
 				Matcher m = pattern_variables.matcher(" " + (String) parsedQuery.get("LAST"));
 				if (m.find()) {
-					String recursive_query_string = ((String) parsedQuery.get("PREFIX")) + ((String) parsedQuery.get("SELECT")) + ms.serializeAsValues() + (String) parsedQuery.get("LAST");
+					String recursive_query_string = ((String) parsedQuery.get("PREFIX")) + ((String) parsedQuery.get("SELECT")) + ms.serializeAsValues() + (String) parsedQuery.get("LAST") + (String) parsedQuery.get("OPTIONS");
 					evaluateSPARQLSon(recursive_query_string, new ArrayList<GetJSONStrategy>(strategy.subList(1, strategy.size())), new ArrayList<HashMap<String,String>>(params.subList(1, params.size())), false);
 				}
 				else {
-					execPostBindQuery((String) parsedQuery.get("PREFIX") + (String) parsedQuery.get("SELECT"), (String) parsedQuery.get("LAST"), ms);
+					execPostBindQuery((String) parsedQuery.get("PREFIX") + (String) parsedQuery.get("SELECT"), 
+							(String) parsedQuery.get("LAST") + (String) parsedQuery.get("OPTIONS"), ms);
 				}
 
 			}
@@ -129,6 +129,7 @@ public class DatabaseWrapper {
 		Matcher m_limit = pattern_limit.matcher(options);
 		int limit = RESULTS_MAX;
 		if (m_limit.find()) {
+			// Force the use of the pipeline execution method
 			params.put("pipeline", "true");
 			limit = Integer.parseInt(m_limit.group(1));
 		}
@@ -190,9 +191,9 @@ public class DatabaseWrapper {
 	 * @return {MappingSet}
 	 */
 	public MappingSet execQueryGenURL(HashMap<String, Object> parsedQuery, 
-			GetJSONStrategy strategy, HashMap<String, String> params, int limit) 
+			GetJSONStrategy strategy, HashMap<String, String> params) 
 					throws JSONException, Exception {
-		String firstQuery = retrieve_firstQuery (parsedQuery, params, limit);
+		String firstQuery = retrieve_firstQuery (parsedQuery, params);
 		System.out.println(firstQuery);
 		String[] bindName = (String[])parsedQuery.get("ALIAS");
 		String[] jpath = (String[])parsedQuery.get("PATH");
@@ -265,6 +266,13 @@ public class DatabaseWrapper {
 						ms.addMapping(mapping_array.get(k));
 					}
 				}
+				// json = null
+				else {
+					for (int i = 0; i < bindName.length; i++) {
+						mapping.put(bindName[i], "UNDEF");
+						ms.addMapping(mapping);
+					}				
+				}
 			}
 		}
 		finally
@@ -289,8 +297,9 @@ public class DatabaseWrapper {
 	public MappingSet execQueryPipeURL(HashMap<String, Object> parsedQuery, 
 			ArrayList<GetJSONStrategy> strategy, ArrayList<HashMap<String, String>> params, int limit) 
 			throws JSONException, Exception {
-		String firstQuery = retrieve_firstQuery (parsedQuery, params.get(0), limit);
+		String firstQuery = retrieve_firstQuery (parsedQuery, params.get(0));
 		System.out.println(firstQuery);
+		Boolean distinctQuery = retrieve_distinct((String)parsedQuery.get("SELECT"));
 		String[] bindName = (String[])parsedQuery.get("ALIAS");
 		String[] jpath = (String[])parsedQuery.get("PATH");
 		Query query = QueryFactory.create(firstQuery);
@@ -325,7 +334,7 @@ public class DatabaseWrapper {
 				MappingSet ms_temp = new MappingSet();
 				ms_temp.set_var_names(ms_varnames);
 				
-				QuerySolution rb = rs.nextSolution() ;	
+				QuerySolution rb = rs.nextSolution() ;
 				HashMap<String, String> mapping = mappQuerySolution(rb, vars_name);
 				String url_req = ApiWrapper.insertValuesURL((String)parsedQuery.get("URL"), rb, params.get(0).get("replace_string"));
 				Object json = null;
@@ -346,7 +355,7 @@ public class DatabaseWrapper {
 					for (int i = 0; i < bindName.length; i++) {
 						try {				
 							Object value = JsonPath.parse(json).read(jpath[i]);
-							mapping_array = updateMappingArray(mapping_array, value, bindName[i], i, mapping);					
+							mapping_array = updateMappingArray(mapping_array, value, bindName[i], i, mapping);									
 						}
 						catch (Exception name) {
 							System.out.println("ERROR: " + name);
@@ -384,8 +393,16 @@ public class DatabaseWrapper {
 					ms_temp = mappPostBindQuery(recursive_query_string, limit);
 				}
 				ms.set_var_names(ms_temp.var_names);
-				for (int k=0; k<ms_temp.mappings.size(); k++){
-					ms.addMapping(ms_temp.mappings.get(k));
+				if(distinctQuery) {
+					int ms_size = ms.mappings.size();
+					ms.addDistinctMappingsFromMappingSet(ms_temp);
+					// We reduce the mappingCount as the no-distinct mappings are not added
+					this.mappingCount += ms.mappings.size() - ms_size - ms_temp.mappings.size();
+				}
+				else {
+					for (int k=0; k<ms_temp.mappings.size(); k++){
+						ms.addMapping(ms_temp.mappings.get(k));
+					}
 				}
 			}
 		}
@@ -399,22 +416,41 @@ public class DatabaseWrapper {
 	}
 	
 	/*
+	 * FUNCTION: Retrieve a SELECT DISTINCT query
+	 * @param {HashMap<String, Object>} parsedQuery
+	 * @param {HashMap<String, String>} params
+	 * @param {String} selectQuery
+	 * @return {Boolean}
+	 */
+	public Boolean retrieve_distinct(String selectQuery) {
+		String regex = "SELECT DISTINCT";
+		Pattern pattern_variables = Pattern.compile(regex);
+		Matcher m = pattern_variables.matcher(selectQuery);
+		if (m.find()) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+	
+	/*
 	 * FUNCTION: Get the first query to execute before mapping the JSON values
 	 * @param {HashMap<String, Object>} parsedQuery
 	 * @param {HashMap<String, String>} params
 	 * @param {int} limit
 	 * @return {String}
 	 */
-	public String retrieve_firstQuery (HashMap<String, Object> parsedQuery, HashMap<String, String> params, int limit) {
+	public String retrieve_firstQuery (HashMap<String, Object> parsedQuery, HashMap<String, String> params) {
 		String firstQuery = (String) parsedQuery.get("PREFIX") + " SELECT * WHERE { " + (String) parsedQuery.get("FIRST") + " } ";
 		// Optimize the parsed query to call the API a minimum amount of times
 		if(params.containsKey("min_api_call") && params.get("min_api_call").equals("true")) {
 			parsedQuery = this.apiOptimizer.minimizeAPICall(parsedQuery);
 			if (parsedQuery.get("VARS").toString().length()>0) {
-				firstQuery = (String) parsedQuery.get("PREFIX") + " SELECT DISTINCT " + parsedQuery.get("VARS") + " WHERE {" + (String) parsedQuery.get("FIRST") + "} LIMIT " + limit;
+				firstQuery = (String) parsedQuery.get("PREFIX") + " SELECT DISTINCT " + parsedQuery.get("VARS") + " WHERE {" + (String) parsedQuery.get("FIRST") + "}";
 			}
 			else {
-				firstQuery = (String) parsedQuery.get("PREFIX") + " SELECT * " + " WHERE {" + (String) parsedQuery.get("FIRST") + "} LIMIT " + limit;
+				firstQuery = (String) parsedQuery.get("PREFIX") + " SELECT * " + " WHERE {" + (String) parsedQuery.get("FIRST") + "}";
 			}
 		}
 		return firstQuery;
@@ -481,35 +517,40 @@ public class DatabaseWrapper {
 	 * @param {HashMap<String, String>} initial_mapping
 	 * @return {ArrayList<HashMap<String, String>>}
 	 */
-	public ArrayList<HashMap<String, String>> updateMappingArray(ArrayList<HashMap<String, String>> mapping_array, Object jsonValue, String bindName, int bindName_index, HashMap<String, String> initial_mapping) {
+	public ArrayList<HashMap<String, String>> updateMappingArray(ArrayList<HashMap<String, String>> mapping_array, Object jsonValue, String bindName, int bindName_index, HashMap<String, String> initial_mapping) throws Exception {
 		int mapping_array_size = mapping_array.size();
 		// CASE 1: value.class = Array of Elements
 		if (jsonValue.getClass().equals(net.minidev.json.JSONArray.class)){
-			for (int j=0; j<((net.minidev.json.JSONArray)jsonValue).size(); j++){		
-				// CASE 1.A: json_nav = first argument
-				if(bindName_index==0){
-					Object mapping_clone = initial_mapping.clone();
-					mapping_array.add((HashMap<String, String>)mapping_clone); // I initiate by cloning the mapping I had built into all the mapping_array mappings
-					mapping_array.get(mapping_array.size()-1).put(bindName, serializeValue(((net.minidev.json.JSONArray)jsonValue).get(j))); // I add to the mapping_array mappings the relative JSON of the JSONArray
-				}
-				// CASE 1.B: json_nav = next arguments
-				else {
-					// I assign to each element of mapping_array the first value of the new argument
-					if(j==0){
-						for (int k=0; k<mapping_array.size(); k++){
-							mapping_array.get(k).put(bindName, serializeValue(((net.minidev.json.JSONArray)jsonValue).get(j))); // I add to the mapping_array mappings the relative JSON of the JSONArray
-						}
+			if(((net.minidev.json.JSONArray)jsonValue).isEmpty()) {
+				throw new NullPointerException("Empty Array");
+			}
+			else {
+				for (int j=0; j<((net.minidev.json.JSONArray)jsonValue).size(); j++){		
+					// CASE 1.A: json_nav = first argument
+					if(bindName_index==0){
+						Object mapping_clone = initial_mapping.clone();
+						mapping_array.add((HashMap<String, String>)mapping_clone); // I initiate by cloning the mapping I had built into all the mapping_array mappings
+						mapping_array.get(mapping_array.size()-1).put(bindName, serializeValue(((net.minidev.json.JSONArray)jsonValue).get(j))); // I add to the mapping_array mappings the relative JSON of the JSONArray
 					}
-					// For each next values, I first "duplicate" the original mapping_array and then assign the value to the duplicate
+					// CASE 1.B: json_nav = next arguments
 					else {
-						for (int k=0; k<mapping_array_size; k++){
-							Object mapping_clone = mapping_array.get(k).clone();
-							mapping_array.add((HashMap<String, String>)mapping_clone);
-							mapping_array.get(mapping_array.size()-1).put(bindName, serializeValue(((net.minidev.json.JSONArray)jsonValue).get(j)));
+						// I assign to each element of mapping_array the first value of the new argument
+						if(j==0){
+							for (int k=0; k<mapping_array.size(); k++){
+								mapping_array.get(k).put(bindName, serializeValue(((net.minidev.json.JSONArray)jsonValue).get(j))); // I add to the mapping_array mappings the relative JSON of the JSONArray
+							}
+						}
+						// For each next values, I first "duplicate" the original mapping_array and then assign the value to the duplicate
+						else {
+							for (int k=0; k<mapping_array_size; k++){
+								Object mapping_clone = mapping_array.get(k).clone();
+								mapping_array.add((HashMap<String, String>)mapping_clone);
+								mapping_array.get(mapping_array.size()-1).put(bindName, serializeValue(((net.minidev.json.JSONArray)jsonValue).get(j)));
+							}
 						}
 					}
 				}
-			}	
+			}
 		}
 		// CASE 2: value.class = Single Element
 		else {
@@ -561,7 +602,7 @@ public class DatabaseWrapper {
 			}
 			ms.set_var_names(ms_varnames);
 			// The order of results is undefined.
-			while (rs.hasNext() && this.mappingCount < limit ) {				
+			while (rs.hasNext()) {				
 				QuerySolution rb = rs.nextSolution() ;	
 				System.out.println("--DEBUG-- "+rb);
 				HashMap<String, String> mapping = mappQuerySolution(rb, vars_name);

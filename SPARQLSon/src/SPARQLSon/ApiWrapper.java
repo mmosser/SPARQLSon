@@ -1,24 +1,16 @@
 package SPARQLSon;
 
-//import java.io.BufferedReader;
-//import java.io.InputStreamReader;
-//import java.net.URL;
-
-//import java.util.ArrayList;
 import java.util.HashMap;
-//import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.jena.query.QuerySolution;
-//import org.apache.jena.sparql.core.QuerySolutionBase;
 import org.json.*;
 
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
 
 
-// changes from MM included
 
 public class ApiWrapper {
 	
@@ -40,130 +32,9 @@ public class ApiWrapper {
 		    url = m.replaceFirst(value);
 		    m = pattern_variables.matcher(url);
 		}
-//		System.out.println("--DEBUG INSERTVALUESURL-- Url: "+url);
 		return url;
 	}
 	
-	
-//OLD VERSION WITHOUT DEPENDENCY JSONPATH	
-	
-/*	
-	public static ArrayList<String> getKeys(String serializedKeys) {	// MM changed the regex pattern to match the [*]
-		
-		System.out.println("--DEBUG SERIALIZEDKEYS-- "+serializedKeys);
-		ArrayList<String> keys = new ArrayList<String>();		
-		
-//OLD:	Pattern pattern_variables = Pattern.compile("\\[([\"]{0,1}\\w*[\"]{0,1})\\]"); //encuentra [], hay "" o no, si lo encuentras es un object sino una regla, agregalo a una lista
-//MM: 	Change in the regex to match the [*] key if there is
-		Pattern pattern_variables = Pattern.compile("\\[([\"]{0,1}[\\*]{0,1}\\w*[\"]{0,1})\\]"); 
-
-		Matcher m = pattern_variables.matcher(serializedKeys);
-		while (m.find()) {
-		    String s = m.group(1);
-		    keys.add(s);
-		}
-		return keys;
-	}
-
-	
-	public static Object getValueJson(Object json, String jpath) throws JSONException { // MM changed the regex pattern to match the [*]
-
-		if (json.getClass().equals(JSONObject.class)) {
-			
-			String key = keys.get(0).substring(1, keys.get(0).length() - 1); // with the first element of keys: abc <- "abc"
-		
-			if (keys.size() == 1) {
-//				System.out.println("--DEBUG APIWRAPPER SHOW JSON-- \n"+((JSONObject)json).get(key));
-				return ((JSONObject)json).get(key);
-			}
-			else {
-				if (keys.get(1).charAt(0) == '"') { // the second key of keys is a string so we have another json
-					ArrayList<String> new_keys = new ArrayList<String>(keys.subList(1, keys.size()));
-					return getValueJson(((JSONObject)json).get(key), new_keys);
-				}
-				else { // the second key of keys is a number or * so we have an array of json
-					ArrayList<String> new_keys = new ArrayList<String>(keys.subList(1, keys.size()));
-					return getValueJson(((JSONObject)json).getJSONArray(key), new_keys);
-				}
-			}
-		}
-		else if(json.getClass().equals(JSONArray.class)) {
-//OLD:		String key = keys.get(0).substring(0, keys.get(0).length());
-			String key = keys.get(0);
-//			System.out.println("--DEBUG APIWRAPPER ARRAY'S KEY-- The key requested is: " + key);
-			
-//MM:		Change to handle the case of [*]
-			if (key.charAt(0)=='*') {
-				return(getAllFromJsonArray((JSONArray)json,keys));				
-			}
-			else {
-				if (keys.size() == 1) {
-					return ((JSONArray)json).get(Integer.parseInt(key));
-				}
-				else {	
-					if (keys.get(1).charAt(0) == '"') {
-						ArrayList<String> new_keys = new ArrayList<String>(keys.subList(1, keys.size()));
-						return getValueJson(((JSONArray)json).get(Integer.parseInt(key)), new_keys);
-					}
-					else {
-						ArrayList<String> new_keys = new ArrayList<String>(keys.subList(1, keys.size()));
-						return getValueJson(((JSONArray)json).get(Integer.parseInt(key)), new_keys);
-					}
-				}
-			}
-		}
-		else {
-			return null;
-		}
-
-	}
-	
-//MM: New method to handle the case of [*]	
-	public static ArrayList<Object> getAllFromJsonArray(JSONArray jsonArray, ArrayList<String> keys) throws JSONException {	
-
-		ArrayList<Object> result = new ArrayList<Object>();
-
-		if (keys.size() == 1) {
-			for (int i=0; i<jsonArray.length();i++){
-				result.add((Object)jsonArray.get(i));
-			}
-		}
-		else {
-			ArrayList<String> new_keys = new ArrayList<String>(keys.subList(1, keys.size())); // new_keys init at 2 because we don't want to keep the *
-			for(int i=0; i<jsonArray.length(); i++) {
-				result.add(i, getValueJson(jsonArray.get(i), new_keys));
-			}
-		}
-	
-		return (mergeArrayLists(result));
-
-	}
-	
-//MM: New function to manage the case with more than one [*]: [...,...] <- [[...],[...]]	
-	public static ArrayList<Object> mergeArrayLists(ArrayList<Object> list) {
-		
-		ArrayList<Object> list_merged = new ArrayList<Object>();
-		boolean iterate = false;
-
-		for (int i=0; i<list.size(); i++){
-			if(list.get(i).getClass().equals(ArrayList.class)){
-				iterate=true;
-				for (int j=0; j<((ArrayList)list.get(i)).size(); j++){
-					list_merged.add(((ArrayList)list.get(i)).get(j));
-				}
-			}
-			else{
-				list_merged.add(list.get(i));
-			}	
-		}
-		if (iterate){ //There is at least one element of "list" which is an ArrayList, so we iterate.
-			return (mergeArrayLists(list_merged));
-		}
-		else { //All the elements of "list" are simple Objects, so we end.
-			return list;
-		}
-	}
-*/	
 
 
 }

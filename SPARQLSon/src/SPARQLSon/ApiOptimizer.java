@@ -85,53 +85,44 @@ public class ApiOptimizer {
 		for (int i=0; i<inserted_variables.size(); i++) {
 			inserted_variables.set(i, "?" + inserted_variables.get(i));
 		}
-		ArrayList<String> selected_variables = new ArrayList<String>();
-		selected_variables.addAll(inserted_variables);
 		
 		// Separate an eventual values_section from the rest of the FIRST section
-		String values_regex ="( *VALUES *\\([^\\)]*\\) *\\{[^\\}]* *\\} *)(.*$)";
+		String values_regex ="(.*)( *VALUES *\\([^\\)]*\\) *\\{[^\\}]* *\\} *)(.*$)";
 		String values_section = "";
 		pattern_variables = Pattern.compile(values_regex);
 		m = pattern_variables.matcher((String)parsedQuery.get("FIRST"));
-		if(m.find()){
-			values_section = m.group(1);
-			parsedQuery.put("FIRST", m.group(2));
+		while(m.find()){
+			values_section += m.group(2);
+			parsedQuery.put("FIRST", m.group(1) + " " + m.group(3));
+			m = pattern_variables.matcher((String)parsedQuery.get("FIRST"));
 		}
 		
-		// Parse the first part of the query into (basic and SPARQL-Service) sections. Each section contains a list of parsed triplets.
-		ArrayList<TripletParser> triplets_to_put_first = TripletParser.getParsedQuery((String)parsedQuery.get("FIRST"));
+		// Parse the first section into a list of TripletParsers corresponding to the relative SPARQL blocks
+		ArrayList<TripletParser> triplets_to_put_first = TripletParser.getParsedSPARQLBlocks((String)parsedQuery.get("FIRST"));
 		ArrayList<TripletParser> triplets_to_put_last = new ArrayList<TripletParser>();
 		
 		if (inserted_variables.size()>0) {
-			// Eject the triplets including the injected_variables and stock the variables linked by those triplets
-			HashMap<String, Object> opt = ejectIncludingTriplets(inserted_variables, triplets_to_put_first);
-			selected_variables.addAll((ArrayList<String>)opt.get("linked_variables"));
-			triplets_to_put_last = (ArrayList<TripletParser>)opt.get("selected_triplets");
 			
-			// Eject the triplets constraining the linked_variables (no other variable in the triplet)
-			if (((ArrayList<String>)opt.get("linked_variables")).size()>0) {
-				triplets_to_put_last = ejectConstrainingTriplets(
-						(ArrayList<String>)opt.get("linked_variables"),
-						(ArrayList<TripletParser>)opt.get("selected_triplets"));
-			}
+			// Eject the triplets constraining the inserted variables (no other variable in the triplet)
+			triplets_to_put_last = ejectConstrainingTriplets(inserted_variables, triplets_to_put_first);
 			
 			// Eject the triplets which are independent from the selected_variables from the first query part
 			ejectIndependantTriplets(inserted_variables, triplets_to_put_first);
 			
 			// Remove from the first part of the query the useless triplets which are called later
-			parsedQuery.put("FIRST", values_section + " " + TripletParser.reverseParsedQuery(triplets_to_put_first));
+			parsedQuery.put("FIRST", values_section + " " + TripletParser.reverseParsedSPARQLBlocks(triplets_to_put_first));
 			// Add to the last part of the query the triplets which are needed to Select the other variables later
-			parsedQuery.put("LAST", TripletParser.reverseParsedQuery(triplets_to_put_last) + (String)parsedQuery.get("LAST"));
+			parsedQuery.put("LAST", values_section + " " + TripletParser.reverseParsedSPARQLBlocks(triplets_to_put_last) + (String)parsedQuery.get("LAST"));
 		}
 		else {
 			// Put all the FIRST section after the API call
 			triplets_to_put_last = triplets_to_put_first;
 			parsedQuery.put("FIRST", "");
-			parsedQuery.put("LAST", values_section + " " + TripletParser.reverseParsedQuery(triplets_to_put_last) + (String)parsedQuery.get("LAST"));
+			parsedQuery.put("LAST", values_section + " " + TripletParser.reverseParsedSPARQLBlocks(triplets_to_put_last) + (String)parsedQuery.get("LAST"));
 		}
 		// Stock in a String the variables to Select before calling the API
 		String needed_variables_string = "";
-		for (String var: selected_variables) {
+		for (String var: inserted_variables) {
 			needed_variables_string += var + " ";
 		}
 		// Add to the parsed Query the variables to Select before calling the API through Service
@@ -139,49 +130,7 @@ public class ApiOptimizer {
 		return parsedQuery;
 	}
 	
-	/*
-	 * FUNCTION: Eject the triplets including the specified variables and stock the other variables linked by those triplets
-	 * @param {ArrayList<String>} vars
-	 * @param {ArrayList<TripletParser>} list_parsed_triplets
-	 * @return {HashMap<String, Object>}
-	 */
-	public HashMap<String, Object> ejectIncludingTriplets(ArrayList<String> vars, ArrayList<TripletParser> list_parsed_triplets) {
-		ArrayList<String> linked_variables = new ArrayList<String>();
-		ArrayList<TripletParser> selected_triplets = new ArrayList<TripletParser>();
-		// Iterate over the inserted variables
-		for (String var: vars) {
-			// Iterate over the (basic and SPARQL-Service) sections of the first part of the query
-			for (int section=0; section< list_parsed_triplets.size(); section++) {
-				// Iterate over the list of triplets in the section
-				for (int triplet=0; triplet<list_parsed_triplets.get(section).triplets.size(); triplet++) {
-					int element = 0;
-					boolean include = false;
-					// Iterate over the elements of the triplet
-					while (element<3) {
-						if(var.equals(list_parsed_triplets.get(section).triplets.get(triplet)[element])) {
-							for (int other_element=0; other_element<3; other_element++) {
-								if(other_element!=element && list_parsed_triplets.get(section).triplets.get(triplet)[other_element].startsWith("?")) {
-									// Stock the variables linked to inserted variables by a triplet
-									linked_variables.add(list_parsed_triplets.get(section).triplets.get(triplet)[other_element]);
-								}
-							}
-							element=3;
-							include = true;
-						} else { element +=1; }
-					}
-					// Add the triplet which doesn't contain an inserted variable to the selected triplets
-					if (!include) {
-						TripletParser.addTripletToParsedQuery(selected_triplets, list_parsed_triplets.get(section), triplet);
-
-					}
-				}
-			}
-		}
-		HashMap<String, Object> result = new HashMap<String, Object>();
-		result.put("linked_variables", linked_variables);
-		result.put("selected_triplets", selected_triplets);
-		return result;
-	}
+	
 	
 	/*
 	 * FUNCTION: Eject the triplets constraining the specified variables (no other variable in the triplet)
@@ -263,5 +212,49 @@ public class ApiOptimizer {
 			}
 		}
 
+	}
+	
+	/*
+	 * FUNCTION: Eject the triplets including the specified variables and stock the other variables linked by those triplets
+	 * @param {ArrayList<String>} vars
+	 * @param {ArrayList<TripletParser>} list_parsed_triplets
+	 * @return {HashMap<String, Object>}
+	 */
+	public HashMap<String, Object> ejectIncludingTriplets(ArrayList<String> vars, ArrayList<TripletParser> list_parsed_triplets) {
+		ArrayList<String> linked_variables = new ArrayList<String>();
+		ArrayList<TripletParser> selected_triplets = new ArrayList<TripletParser>();
+		// Iterate over the inserted variables
+		for (String var: vars) {
+			// Iterate over the (basic and SPARQL-Service) sections of the first part of the query
+			for (int section=0; section< list_parsed_triplets.size(); section++) {
+				// Iterate over the list of triplets in the section
+				for (int triplet=0; triplet<list_parsed_triplets.get(section).triplets.size(); triplet++) {
+					int element = 0;
+					boolean include = false;
+					// Iterate over the elements of the triplet
+					while (element<3) {
+						if(var.equals(list_parsed_triplets.get(section).triplets.get(triplet)[element])) {
+							for (int other_element=0; other_element<3; other_element++) {
+								if(other_element!=element && list_parsed_triplets.get(section).triplets.get(triplet)[other_element].startsWith("?")) {
+									// Stock the variables linked to inserted variables by a triplet
+									linked_variables.add(list_parsed_triplets.get(section).triplets.get(triplet)[other_element]);
+								}
+							}
+							element=3;
+							include = true;
+						} else { element +=1; }
+					}
+					// Add the triplet which doesn't contain an inserted variable to the selected triplets
+					if (!include) {
+						TripletParser.addTripletToParsedQuery(selected_triplets, list_parsed_triplets.get(section), triplet);
+
+					}
+				}
+			}
+		}
+		HashMap<String, Object> result = new HashMap<String, Object>();
+		result.put("linked_variables", linked_variables);
+		result.put("selected_triplets", selected_triplets);
+		return result;
 	}
 }

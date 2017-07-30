@@ -102,11 +102,11 @@ public class TripletParser {
 	}
 	
 	/* 
-	 * FUNCTION: Parse a SPARQL Query section into a list of TripletParsers
+	 * FUNCTION: Parse SPARQL Query constraints into a list of TripletParsers corresponding to the relative SPARQL blocks
 	 * @param {String} sparqlQuerySection
 	 * @return {ArrayList<TripletParser>}
 	 */
-	public static ArrayList<TripletParser> getParsedQuery(String sparqlQuerySection) {
+	public static ArrayList<TripletParser> getParsedSPARQLBlocks(String sparqlQuerySection) {
 		// Match ?a ?b ?c ; ?d ?e . and transform into ?a ?b ?c . ?a ?d ?e .
 		String triplet_regex = "(.*)((<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+) +(<[\\w\\-\\%\\?\\&\\=\\.\\{\\}\\:\\/\\,]+>|\\?\\w+|\\w+:\\w+)) *;(.*$)";
 		Pattern pattern_triplet = Pattern.compile(triplet_regex);
@@ -169,7 +169,7 @@ public class TripletParser {
 	 * @param {ArrayList<TripletParser>} parsedTriplets
 	 * @return {String}
 	 */
-	public static String reverseParsedQuery(ArrayList<TripletParser> parsedTriplets) {
+	public static String reverseParsedSPARQLBlocks(ArrayList<TripletParser> parsedTriplets) {
 		String query= "";
 		for (int i=0; i<parsedTriplets.size();i++) {
 			String triplets_string = "";
@@ -211,7 +211,7 @@ public class TripletParser {
 				+ "	   pojfiunfo;lkco,cin;^zù"
 				+ "}";
 		
-		ArrayList<TripletParser> result = getParsedQuery(test);
+		ArrayList<TripletParser> result = getParsedSPARQLBlocks(test);
 		for (int i=0; i< result.size(); i++) {
 			System.out.println("-- SECTION n°"+i+" --");
 			System.out.println("TYPE: " + result.get(i).section_type);
@@ -223,5 +223,4 @@ public class TripletParser {
 			}
 		}
 	}
-
 }
